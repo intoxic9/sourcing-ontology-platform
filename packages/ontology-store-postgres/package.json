@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
     "@sourcing/ontology": "workspace:*",

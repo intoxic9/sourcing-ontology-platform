@@ -122,7 +122,7 @@ Emits `contracts/ontology.schema.json` from its Zod schemas at build time.
 
 The only adapter, and the sole owner of DDL. Implements `OntologyContext`. Owns the
 migrations, the seed script, transaction boundaries, and every write to
-`object_property`, `links` and `audit_records`. Migrations live inside this package
+`object_properties`, `links` and `audit_records`. Migrations live inside this package
 rather than a top-level `db/` so that exactly one component owns the physical schema.
 
 ### `apps/api`
@@ -151,7 +151,9 @@ because two hand-maintained definitions of the provenance envelope will drift.
 
 ## 5. Storage design
 
-Five tables. Three are the ontology, two are governance.
+Six tables. Three are the ontology (`objects`, `object_properties`, `links`) and three
+are governance (`audit_records`, `audit_record_objects`, `schema_versions`). A seventh,
+`schema_migrations`, belongs to the migration runner rather than to the model.
 
 ### `objects` — identity only
 
@@ -159,7 +161,7 @@ Five tables. Three are the ontology, two are governance.
 No properties. Keeping identity separate from properties is what lets a merge later
 repoint properties without rewriting identity.
 
-### `object_property` — the Tracked layer
+### `object_properties` — the Tracked layer
 
 Primary key `(object_id, property_name, ordinal)`. Then:
 
@@ -169,13 +171,19 @@ Primary key `(object_id, property_name, ordinal)`. Then:
   that tried to encode every enum would duplicate the type definitions it is meant to
   describe. Its job is telling a reader how to interpret the `jsonb` without consulting
   the schema.
-- `confidence numeric(4,3)`, `CHECK (confidence >= 0 AND confidence <= 1)`
+- `confidence` via the `confidence_score` domain (`numeric(4,3)` bounded to 0–1).
+  `numeric`, not float, because the verified-implies-1.0 constraint compares for exact
+  equality and 1.0 is not reliably representable in binary floating point.
 - Provenance **expanded into real columns**: `source_system`, `source_record_id`,
   `pipeline_run_id`, `extracted_at`, `method`. Five columns instead of one `jsonb` blob,
   which turns every lineage and calibration question into a plain `WHERE` — group
   confidence by `method` to check calibration, or find everything one
   `pipeline_run_id` touched in order to retract it.
 - `verified_by`, `verified_at`
+
+`confidence_score` and `provenance_method` are Postgres domains, because both appear
+identically on `object_properties` and `links` and the confidence range rule should have
+exactly one owner.
 
 `ordinal` is how array properties are stored: one row per element, each with its own
 confidence and provenance. This makes `Tracked<T>[]` free rather than a second storage
@@ -194,7 +202,31 @@ CHECK (verified_by IS NULL OR confidence = 1.0)
 
 -- verified_by and verified_at are set together or not at all.
 CHECK ((verified_by IS NULL) = (verified_at IS NULL))
+
+-- The discriminator is checked against the jsonb it claims to describe, so it cannot
+-- drift into decoration. This recovers the one piece of EAV type safety the database
+-- can still give us. TIMESTAMP is checked only as far as "is a string" — format
+-- validation stays with Zod, because two owners of a format rule is one too many.
+CHECK (
+       (value_type = 'STRING'    AND jsonb_typeof(value) = 'string')
+    OR (value_type = 'NUMBER'    AND jsonb_typeof(value) = 'number')
+    OR (value_type = 'BOOLEAN'   AND jsonb_typeof(value) = 'boolean')
+    OR (value_type = 'TIMESTAMP' AND jsonb_typeof(value) = 'string')
+)
+
+-- Two provenance columns are conditionally required rather than always required. Both
+-- are amendments to ONTOLOGY.md §2 — see §8.
+CHECK (source_record_id IS NOT NULL OR method = 'INFERRED')
+CHECK (pipeline_run_id  IS NOT NULL OR method = 'HUMAN_ENTRY')
 ```
+
+`source_record_id` is null for `INFERRED` values because a value derived from other
+tracked values has no raw source row. Overloading the column to sometimes mean "raw
+source" and sometimes "the properties this was derived from" would give it two meanings,
+which is worse than a null. Derivation tracking gets its own structure when `INFERRED`
+values actually arrive. `pipeline_run_id` is null for `HUMAN_ENTRY` because a person
+typing a value has no ingestion run, and synthesising one would corrupt the "everything
+run X touched" retraction query.
 
 #### Indexes
 
@@ -202,7 +234,14 @@ CHECK ((verified_by IS NULL) = (verified_at IS NULL))
 -- Low-confidence review queue: what a human should go look at next.
 -- Partial, because verified rows are all confidence 1.0 and never belong in the queue,
 -- which keeps the index proportional to the work outstanding rather than to the table.
-CREATE INDEX ... ON object_property (confidence) WHERE verified_by IS NULL;
+CREATE INDEX object_properties_review_queue_idx
+    ON object_properties (confidence) WHERE verified_by IS NULL;
+
+-- The same index on links. Path confidence is the minimum along the path and link
+-- confidence is usually what sets that minimum, so a review queue blind to links would
+-- systematically hide the weakest evidence in the graph.
+CREATE INDEX links_review_queue_idx
+    ON links (confidence) WHERE verified_by IS NULL;
 ```
 
 Object assembly — fetching every property of one object — is served by the primary key
@@ -215,21 +254,71 @@ and cost write throughput for no read benefit.
 
 `id`, `link_type`, `from_id`, `to_id`, `created_at`, unique on
 `(link_type, from_id, to_id)`, plus the same confidence, expanded provenance, and
-verification columns as `object_property`.
+verification columns as `object_properties`.
 
-**Link confidence is a column on `links`, not a row in `object_property`.** Weakest-link
+**Link confidence is a column on `links`, not a row in `object_properties`.** Weakest-link
 traversal is the platform's core read path; it must walk edges and accumulate
 `LEAST(...)` without joining out to a property table per hop. This is the one place where
 the uniform EAV treatment is deliberately not applied, and the reason is query
 performance on the single query that matters most.
 
+`links` also carries `CHECK (from_id <> to_id)`, since all five Week 1 link types join
+different object types and a self-edge is the cheapest degenerate cycle to exclude, and
+two directional indexes:
+
+```sql
+CREATE INDEX links_from_idx ON links (from_id, link_type);
+CREATE INDEX links_to_idx   ON links (to_id, link_type);
+```
+
+Both are needed because traversal reads edges in both directions — the second hop of the
+critical path runs against the arrow — and the `(link_type, from_id, to_id)` unique
+index leads with `link_type` and so serves neither.
+
 ### `audit_records` and `schema_versions`
 
-`audit_records` as specified in `ONTOLOGY.md` §5, append-only, never updated or deleted.
+`audit_records` as specified in `ONTOLOGY.md` §5, append-only, never updated or deleted,
+plus an `approver_type` column added in `003`. Beyond the constraints in `ONTOLOGY.md` it
+carries the governance rules described in §6.5: an agent-proposed action cannot reach
+`EXECUTED` without an approver, an `APPROVED` record must name its approver, and an
+approver must be a human. `EXECUTED` without an approver stays legal, because that is
+exactly the shape of a human-initiated action whose `approvalPolicy` returned `AUTO`.
 
-`schema_versions` holds **exactly one row, written by migration**. The table stays
-because it is cheap and because audit records will eventually point at it, but nothing in
-Week 1 writes a second row.
+`schema_versions` holds **exactly one row**, written by the migration that lands
+alongside the object and link type definitions in `@sourcing/ontology`. It cannot be
+written earlier: its `object_types`/`link_types` payload is produced by those
+definitions, and inventing the `ObjectTypeDefinition` shape in SQL first would invert
+the source of truth. Both columns are `NOT NULL`, so there is no state in which the row
+exists with an empty payload.
+
+`objects.schema_version` is a foreign key to `schema_versions(version)`, which means no
+object can be inserted until that row exists. That is the intended gate.
+
+### `audit_record_objects` — which objects a record touched
+
+`ONTOLOGY.md` §5 gives `AuditRecord` no reference to the objects it mutated, only opaque
+`beforeState`/`afterState` payloads, but §8 requires audit history to be queryable for
+any object. A join table rather than an `object_id` column, because
+`ActionDefinition.execute` returns `ObjectMutation[]` and one action may legitimately
+mutate several objects.
+
+Primary key `(audit_record_id, object_id)`, plus an index on `(object_id)` alone —
+the primary key's prefix serves the forward direction, while object-scoped audit history
+is the direction humans actually ask for.
+
+Two limits worth knowing. `before_state` and `after_state` remain whole-action payloads,
+so for a multi-object action you can find every record that touched an object but must
+read the `jsonb` to see which slice applied to it; per-object before/after is a larger
+change to `ONTOLOGY.md` §5 and neither Week 1 Action needs it. And "every audit record
+addresses at least one object" needs a trigger or a deferred constraint to enforce in
+the database, so the conformance check asserts it instead.
+
+### `schema_migrations`
+
+A sixth table, owned by the migration runner rather than by the ontology: it records
+which `.sql` files have been applied, where `schema_versions` records which ontology
+schema the data conforms to. Created by the runner with `CREATE TABLE IF NOT EXISTS` so
+that `001` stays purely about the ontology.
 
 ### Traversal
 
@@ -250,7 +339,7 @@ the missing devices are invisible.
 
 These are not conventions. They are the properties the system's claims rest on.
 
-1. **Nothing writes to `object_property` except through the repository layer in
+1. **Nothing writes to `object_properties` except through the repository layer in
    `@sourcing/ontology-store-postgres`.** EAV gives up database-level type constraints:
    Postgres cannot tell you that `legalName` on a `SUPPLIER` must be a string, or that
    `SUPPLIES` runs Supplier→Part. Zod validation at the ontology layer is therefore the
@@ -263,6 +352,14 @@ These are not conventions. They are the properties the system's claims rest on.
    `@sourcing/ontology`. This is the backstop for invariant 1 — it catches the exact
    class of drift that dropping DB-level type constraints admits.
 
+   **It also fails if `schema_versions` is empty after migrations have run.** "Not yet
+   written" and "never written" must not look the same: an unpopulated
+   `schema_versions` is indistinguishable from a half-applied migration set, and the
+   whole point of persisting the schema is that something checks it is there.
+
+   **And it fails if any `audit_records` row addresses no object**, which the database
+   cannot enforce without a trigger.
+
 3. **The store package is the only holder of database credentials, enforced in CI.** A
    check fails the build if anything outside `@sourcing/ontology-store-postgres` imports
    `pg` or reads `DATABASE_URL` — including `apps/api` and every script. Invariant 1 is
@@ -274,8 +371,39 @@ These are not conventions. They are the properties the system's claims rest on.
    weakest link names the single fact a human needs to go verify; a product reports a
    number nobody can act on.
 
-5. **Agents may propose Actions. Agents may never execute them.** Enforced at the API
-   boundary where actor identity is established.
+5. **Agents may propose Actions. Agents may never execute them.** Enforced in the
+   database, not only at the API boundary:
+
+   ```sql
+   -- 002: an agent-proposed action cannot reach EXECUTED unapproved.
+   CHECK (NOT (actor_type = 'AGENT' AND status = 'EXECUTED' AND approved_by IS NULL))
+
+   -- 003: and the approver must be a human, not a second agent.
+   CHECK ((approved_by IS NULL) = (approver_type IS NULL))
+   CHECK (approved_by IS NULL OR approver_type = 'HUMAN')
+   ```
+
+   This is the strongest claim the platform makes, so it is structural rather than a
+   boundary convention. An agent-proposed action that auto-executes with no human
+   involved was executed by the agent in the only sense a regulator cares about;
+   "the agent proposed it, the system executed it" dissolves the guarantee into a
+   technicality.
+
+   **How far this actually goes, so nobody over-trusts it.** `approver_type` turns an
+   implicit assumption into an explicit claim recorded inside the immutable audit
+   record: reaching `EXECUTED` requires the writer to assert on the record that a human
+   approved, which makes a false claim a discoverable lie rather than a silent absence.
+   It is not proof. The column records what the caller says the approver is, and
+   `'AGENT'` is deliberately storable — if `'HUMAN'` were the only representable value
+   the rejection could never fire and the model would quietly compel the lie. Making
+   approver identity unforgeable requires it to be a stored fact rather than a claim,
+   which is the `actors` table deferred in §10.
+
+   **Consequence: `approvalPolicy` governs human-initiated actions only.** For
+   `actorType: 'AGENT'` it is advisory at most. Nobody reading an `approvalPolicy` that
+   returns `AUTO` should be able to conclude it applies to agents, so this has to be
+   stated at the `ActionDefinition` type itself and not left to be rediscovered from
+   the constraint.
 
 6. **Every mutation writes an immutable `AuditRecord`** with before and after state, in
    the same transaction as the mutation.
@@ -310,6 +438,9 @@ maintained indefinitely for it.
 `flagPartForRequalification` routes on part criticality. A single
 `approvalPolicy: (input, ctx) => 'AUTO' | 'REQUIRES_APPROVAL'` is strictly more
 expressive than both fields and is one concept rather than two overlapping ones.
+
+It applies to human-initiated actions only. Agent-proposed actions always require human
+approval whatever the policy returns — see §6.5.
 
 ### `schema_versions` stays, the schema-versioning machine does not
 
@@ -371,6 +502,41 @@ Recorded so the contract and the code do not silently diverge.
 - §7, deliberate exclusions gains: entity resolution and supplier merge, `Contract`,
   `PurchaseOrder`, agent-proposed schema changes, confidence calibration eval.
 
+- §2, `Provenance.pipelineRunId` is typed as a required `string`. It becomes
+  **optional**, required for every method except `HUMAN_ENTRY`. A person typing a value
+  has no ingestion run, and minting a synthetic one to satisfy the type would put fake
+  rows into the "everything pipeline run X touched" retraction query — the one query
+  that has to be trustworthy when a bad extraction needs rolling back. Enforced by
+  `CHECK (pipeline_run_id IS NOT NULL OR method = 'HUMAN_ENTRY')`.
+
+- §2, `Provenance.sourceRecordId` is typed as a required `string`. It becomes
+  **optional**, required for every method except `INFERRED`. An inferred value is
+  derived from other tracked values and has no raw row, document or page to point at.
+  The rejected alternative was to let it point at the derivation instead, which would
+  give one column two meanings — "raw source" for most rows and "the properties this
+  came from" for inferred ones — and a column with two meanings is harder to reason
+  about than a null. Derivation tracking gets a structure of its own when `INFERRED`
+  values actually arrive. Enforced by
+  `CHECK (source_record_id IS NOT NULL OR method = 'INFERRED')`.
+
+Both amendments make `Tracked<T>`'s provenance envelope honest about methods that
+genuinely lack a field, rather than requiring callers to invent values that then
+pollute lineage queries.
+
+- §5, `AuditRecord` has no reference to the objects it mutated, which leaves the §8
+  requirement that audit history be queryable for any object with no path other than
+  searching `jsonb`. Addressing is added out of band, in the `audit_record_objects`
+  join table, so the `AuditRecord` type itself is unchanged.
+
+- §5, `requiresApproval` semantics: **`approvalPolicy` governs human-initiated actions
+  only.** An agent-proposed action always requires human approval, regardless of what
+  the policy returns, and the database enforces it. See §6.5.
+
+- §5, `AuditRecord` gains **`approverType?: 'HUMAN' | 'AGENT'`**, set together with
+  `approvedBy` and constrained to `'HUMAN'` at approval time. Without it `approvedBy` is
+  a bare identifier and the database can only enforce "somebody approved" rather than
+  "a human approved".
+
 ---
 
 ## 9. Week 1 build checklist
@@ -400,11 +566,21 @@ Recorded so the contract and the code do not silently diverge.
 
 **`@sourcing/ontology-store-postgres`**
 
-- [ ] Migration: `objects`, `object_property`, `links`, `audit_records`,
-      `schema_versions`
-- [ ] Constraints: confidence range, verified⇒1.0, verified pair
-- [ ] Partial index on `(confidence) WHERE verified_by IS NULL`
-- [ ] Single `schema_versions` row written by migration
+- [x] `001_init.sql`: `objects`, `object_properties`, `links`, `audit_records`,
+      `schema_versions`, plus the `confidence_score` and `provenance_method` domains
+- [x] Constraints: confidence range, verified⇒1.0, verified pair, value/value_type
+      agreement, conditional `source_record_id` and `pipeline_run_id`, no self-edges
+- [x] Partial `(confidence) WHERE verified_by IS NULL` index on both
+      `object_properties` and `links`
+- [x] Directional traversal indexes `links_from_idx` and `links_to_idx`
+- [x] Migration runner over numbered `.sql` files, one transaction per file,
+      idempotent via the `schema_migrations` ledger
+- [x] `002_audit_governance.sql`: the `audit_record_objects` join table, the agent
+      cannot-execute-unapproved constraint, and the approver-required constraint
+- [x] `003_approver_identity.sql`: the `approver_type` column, paired with `approved_by`
+      and constrained to `HUMAN`
+- [ ] `004`: the single `schema_versions` row, which can only be written once the object
+      and link type definitions exist in `@sourcing/ontology`
 - [ ] Repository layer — sole writer, Zod validation on every write
 - [ ] Object assembly: EAV rows → `Tracked<T>` objects, arrays via `ordinal`
 - [ ] Recursive-CTE traversal with `LEAST(...)` accumulation and cycle detection
@@ -412,7 +588,8 @@ Recorded so the contract and the code do not silently diverge.
 - [ ] Audit write in the same transaction as every mutation
 - [ ] Audit history query for any object
 - [ ] Seed: ~20 suppliers, ~60 parts, ~10 devices, 3 sites, plus quality events
-- [ ] Conformance check over the seeded database
+- [ ] Conformance check over the seeded database, including a non-empty
+      `schema_versions` assertion
 
 **`apps/api`**
 
@@ -436,6 +613,12 @@ Recorded so the contract and the code do not silently diverge.
 ---
 
 ## 10. Deferred
+
+An `actors` table with a `type` column, referenced by both `audit_records.actor` and
+`audit_records.approved_by`, which would make actor and approver identity a stored fact
+instead of a per-row claim and close the residual gap described in §6.5. Deferred
+because it changes how identity works platform-wide, and `approver_type` gets most of
+the value for one column.
 
 Week 2+: entity resolution and `confirmSupplierMerge`; `Contract` and `PurchaseOrder`
 with LLM clause extraction; the Python extraction service; confidence calibration eval
