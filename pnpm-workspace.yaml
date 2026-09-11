@@ -1,0 +1,16 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+  # Python services join here later. They are pnpm-invisible: each will carry a thin
+  # package.json whose scripts shell out to `uv`, which is how Turborepo graphs and
+  # caches them without pnpm needing to understand Python. See PLAN.md §4.
+  - 'services/*'
+
+# pnpm blocks postinstall scripts unless named here. esbuild is the only one we need:
+# it is the native binary behind vite/vitest and tsx. Anything else asking for build
+# scripts is a decision, not a formality.
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - fastify@5.12.4

@@ -42,8 +42,16 @@ returning the path and its weakest confidence link.
 
 ## 2. Toolchain
 
-- Node 20 (`.nvmrc`), pnpm workspaces, Turborepo
-- TypeScript strict, `NodeNext` module resolution, `noUncheckedIndexedAccess`, no `any`
+- **Node 24 LTS** (`.nvmrc`), pnpm 12 workspaces, Turborepo 2. Node 20 was the original
+  constraint, but it reached end-of-life in April 2026 — starting Week 1 on a runtime
+  that receives no security patches is not a trade worth making for a governance
+  platform.
+- TypeScript strict, `NodeNext` module resolution, `noUncheckedIndexedAccess`,
+  `exactOptionalPropertyTypes`, no `any`
+- **TypeScript pinned to 5.9, not 7.** `typescript-eslint@8` peer-requires
+  `typescript <6.1.0`, and type-aware lint rules are what make "no `any`" enforceable
+  rather than aspirational. Losing typed linting costs more than being a major version
+  behind. Revisit when typescript-eslint ships TS 7 support.
 - Postgres 16 via Docker Compose — the only service in the compose file
 - `pg` (node-postgres) with **no ORM**. EAV assembly and recursive-CTE traversal are
   hand-written SQL regardless; an ORM would add a mapping layer that models none of it.

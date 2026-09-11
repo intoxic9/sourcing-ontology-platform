@@ -1,0 +1,2 @@
+# Numbered plain .sql migrations land here, applied by a ~30-line runner (PLAN.md §2).
+# 001_init.sql creates objects, object_property, links, audit_records, schema_versions.

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Empty on purpose. This package must not reach for Node globals — it has to work
+    // unchanged in any JS runtime for "consumable independently of the app" to be true.
+    "types": []
+  },
+  "include": ["src/**/*"]
+}

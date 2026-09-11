@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sourcing-ontology-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sourcing
+      POSTGRES_PASSWORD: sourcing_dev_only
+      POSTGRES_DB: sourcing_ontology
+      # Deterministic collation, so ordering and unique constraints behave identically
+      # on every developer machine and in CI.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sourcing -d sourcing_ontology']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres-data:
