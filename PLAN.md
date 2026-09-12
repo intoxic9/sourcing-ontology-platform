@@ -250,6 +250,45 @@ lookups by `object_id` and by `(object_id, property_name)`. **No separate
 `(object_id, property_name)` index is created**, because it would duplicate that prefix
 and cost write throughput for no read benefit.
 
+### TypeScript ↔ storage mapping
+
+This boundary is where EAV either stays invisible to consumers or leaks, so the rules
+are written down rather than left to the repository implementation.
+
+| Declaration | TypeScript | Rows |
+|---|---|---|
+| single, required | `Tracked<T>` | exactly one, `ordinal = 0` |
+| single, optional | `Tracked<T> \| undefined` | zero or one, `ordinal = 0` |
+| multiple | `Tracked<T>[]` | N rows, ordinals `0..N-1` |
+
+A multiple-cardinality property is **always present and empty when it has no elements**,
+never `undefined`. That confines optionality to single properties, so no consumer writes
+`supplier.certifications?.length`.
+
+`id` is the one unwrapped field on every object type — `id: string`, not
+`Tracked<string>` — because it lives in `objects.id`, is never a property row, and is
+identity rather than a claim about the world, so it has no confidence or provenance.
+
+**EAV stays invisible because `ordinal`, `value_type` and the row-per-element shape
+appear in no public type.** What makes that possible is that cardinality is *declared*,
+not inferred: the database cannot distinguish "a scalar" from "an array that happens to
+hold one element", so `ObjectTypeDefinition` has to say which it is. The same applies to
+`value_type`, since TypeScript sees `Tracked<string>` for both `STRING` and `TIMESTAMP`.
+
+Four states are therefore conformance errors rather than things to paper over: a single
+property with more than one row; a required single property with no rows; a multiple
+property with non-contiguous ordinals, because a gap means an element was lost and
+silently compacting it would hide the loss; and a `value_type` disagreeing with the
+declaration.
+
+**Where the abstraction is thin**, stated so it is not discovered later. Array elements
+have no identity — `Tracked` carries no element ID, so two identical `certifications`
+entries are indistinguishable and an element can only be addressed positionally. And a
+multiple property is written whole: delete ordinals at or above the new length, upsert
+`0..N-1`, one transaction. Neither matters in Week 1, where `certifications` is the only
+multiple property and nothing mutates it. Both matter when `aliases` arrives with entity
+resolution, and the answer then is an element identity column, not a rework.
+
 ### `links` — relationships
 
 `id`, `link_type`, `from_id`, `to_id`, `created_at`, unique on
@@ -423,6 +462,42 @@ there — generating them buys no additional type safety and costs a pipeline to
 forever. Codegen survives only as the `contracts/ontology.schema.json` emit, which
 exists because Python genuinely cannot read TypeScript types.
 
+### `ObjectTypeDefinition` is a projection of the Zod schemas, via JSON Schema
+
+Two hand-maintained descriptions of the same types drift, so the definitions are not
+declared alongside the schemas. The Zod schemas are the single declaration; JSON Schema
+is the intermediate representation; both the Python contract and
+`ObjectTypeDefinition` are projections of it.
+
+```
+Zod schemas  ──z.toJSONSchema()──>  contracts/ontology.schema.json  ──>  Pydantic
+   (single declaration)                        │
+                                               └──interpret──>  ObjectTypeDefinition
+```
+
+Routing through JSON Schema rather than reading Zod's internals is deliberate:
+`z.toJSONSchema()` is public, stable API, while `schema._zod.def` is neither and would
+break on a minor upgrade. It also makes the artifact Python already needs load-bearing
+instead of a side-product — if the emit is wrong the definition is wrong and the
+conformance check fails, so there is one thing to get right rather than two to keep in
+agreement. Everything survives the round trip: `z.array(...)` gives cardinality,
+`.optional()` gives requiredness, `z.enum([...])` gives the members, and
+`z.iso.datetime()` gives `format: 'date-time'`, which is how `TIMESTAMP` is told from
+`STRING`. The interpreter's only bespoke knowledge is our own convention, that a
+property's value type sits at `properties.value` inside the `Tracked` wrapper.
+
+A builder DSL emitting both artifacts from one call was considered and rejected: a custom
+abstraction layer plus mapped-type gymnastics to keep `z.infer` precise, in place of an
+interpreter that the public API already makes cheap.
+
+**This is why `Tracked` stays a flat object rather than a verified/unverified union.** A
+union would make `confidence: 1` type-level, but it renders `Tracked` as a `oneOf` in
+JSON Schema and forces the interpreter to dig through branches for every property on
+every type. A more precise `Tracked` buys a more fragile derivation. The nested
+`verification` object already removes the invalid-pair state, which is most of the
+value, so confidence-equals-one stays a Zod `.refine()` alongside the database `CHECK`
+that enforces it.
+
 ### Cut generated DDL; verify instead of generate
 
 Likewise for "Postgres tables generated from it". With the EAV model there is no
@@ -479,6 +554,48 @@ splitting them buys a version-bump tax and no consumer benefit. `ontology-sdk` �
 codegen above. `ontology-eval` — see above. Shared `config`/`tsconfig` packages — a root
 `tsconfig.base.json` is sufficient at this size. A shared `types` package — that is what
 `@sourcing/ontology` is.
+
+### `strictObject` everywhere, not `object`
+
+Zod's default object *strips* unknown keys and reports success. For a discriminated
+`Provenance` that is the wrong failure mode: a `pipelineRunId` sent alongside
+`HUMAN_ENTRY` would be silently discarded and the write would succeed having lost the
+field. Silently dropping provenance is the exact failure provenance exists to prevent,
+and the database rejects that row, so a permissive schema would also disagree with
+storage. `z.toJSONSchema()` emits `additionalProperties: false` regardless, so strict
+objects are additionally what keeps the Python contract and the TypeScript runtime
+describing the same thing.
+
+### `mutability` rides on Zod metadata
+
+`.meta({ mutability })` is carried through into the emitted JSON Schema as a sibling
+keyword. That keeps the single-declaration property intact — a sidecar map of
+action-only property names would have been a second hand-maintained description of the
+same types, which is what deriving definitions was meant to avoid.
+
+### `tracked()` has no explicit return type
+
+The honest annotation is `z.ZodType<Tracked<z.output<TValue>>>`, and it does not
+compile: TypeScript cannot verify the assignment while `TValue` is unresolved, for both
+the refined and unrefined forms. The alternative was a weaker annotation stating
+something less true than the inferred type. Instead the tie between `Tracked<T>` and the
+factory is asserted at a concrete instantiation in `tracked.test.ts` using an
+invariant-position type equality, so a drift is a compile error in the test.
+
+This is also why `@typescript-eslint/explicit-module-boundary-types` was removed from
+the lint config: it cannot be satisfied by a generic Zod schema factory without
+weakening the type. The goal it serves is already covered by strict mode,
+`no-explicit-any` and the `no-unsafe-*` rules.
+
+### The definition interpreter reads Zod's own JSON Schema type
+
+`z.core.JSONSchema.BaseSchema` rather than a hand-rolled node type, so a Zod upgrade
+that changes the emitted shape is a compile error rather than a runtime surprise. Zod
+inlines reused subschemas by default — no `$defs`, no `$ref` — so the interpreter walks
+a plain tree. Its only bespoke knowledge is our own convention: a property's value type
+sits at `properties.value` inside the `Tracked` wrapper. Derivation throws rather than
+guessing when a property is not wrapped in `tracked()`, carries a value type the
+ontology cannot store, declares an unknown `mutability`, or is an optional array.
 
 ### Kept despite the pressure to cut
 
@@ -537,23 +654,73 @@ pollute lineage queries.
   a bare identifier and the database can only enforce "somebody approved" rather than
   "a human approved".
 
+- §2, `Tracked<T>`'s `verifiedBy?` and `verifiedAt?` collapse into a single nested
+  **`verification?: { by: string; at: string }`**. Two independent optional fields permit
+  a half-set state that the database already forbids; nesting them makes it
+  unrepresentable instead of merely validated, for the cost of one level of nesting.
+
+- §2, `Provenance` becomes a **discriminated union on `method`**, so the two conditional
+  requirements are type-level rather than convention: `HUMAN_ENTRY` carries no
+  `pipelineRunId`, `INFERRED` carries no `sourceRecordId`, and every other method carries
+  both. This is biconditional where the `001` `CHECK`s are one-directional, so `004`
+  tightens the database to match — `(source_record_id IS NULL) = (method = 'INFERRED')`
+  and likewise for `HUMAN_ENTRY`. "Meaningless but permitted" invites junk, and a row
+  the database accepts but Zod cannot type is a row that can be written and not read.
+
+- §3, `PropertyDefinition` gains **`mutability: 'INGESTION' | 'ACTION_ONLY'`**.
+  `ONTOLOGY.md` marks `Supplier.status` and `Part.requiresRequalification` as only
+  mutable via Action, which implies the other properties are not — and that has to be
+  right, because batch ingestion of 20 suppliers and 60 parts cannot route 400-odd
+  property writes through Actions with approval routing. So "writes are governed" means
+  two write paths and only one of them is Actions. The field makes the distinction
+  enforceable: an ingestion write to an `ACTION_ONLY` property is refused. Without it the
+  annotation in `ONTOLOGY.md` is a comment.
+
+- §3, three fields are named without values. Now fixed as
+  `Device.lifecycleStage` = `DEVELOPMENT | ACTIVE | END_OF_LIFE | DISCONTINUED`,
+  `Site.siteType` = `MANUFACTURING | ASSEMBLY | STERILIZATION | DISTRIBUTION`, and
+  `Device.productFamily` as a free `STRING`, since it is a naming dimension rather than
+  a closed set.
+
+- §3, **`QualityEvent.closedAt` becomes optional.** `ONTOLOGY.md` lists it alongside
+  `openedAt` with no marker, but an open event has no close date, and
+  `approveSupplierChange` turns on exactly that distinction — an open `CRITICAL` event
+  blocks approval. A sentinel date standing in for "still open" would put the
+  precondition at the mercy of a magic value.
+
+- §3, `Supplier.country` and `Site.country` stay **free strings** rather than ISO 3166-1
+  alpha-2. Closing the set would force a normalisation decision ("Germany" vs "DE") that
+  ingestion has not faced yet, and guessing it here would be a constraint invented ahead
+  of the data.
+
+- §4, `AFFECTS_SUPPLIER`'s **many-to-one cardinality is enforced** by a partial unique
+  index on `links (from_id) WHERE link_type = 'AFFECTS_SUPPLIER'` (`004`). The `from_id`
+  is the quality event, so each event names at most one supplier while many events may
+  name the same one. `LinkTypeDefinition.cardinality` records the intent; without the
+  index it would only describe it.
+
 ---
 
 ## 9. Week 1 build checklist
 
 **Workspace**
 
-- [ ] `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.nvmrc`
-- [ ] `docker-compose.yml` with `postgres:16-alpine`
-- [ ] Turbo task graph: `build`, `typecheck`, `test`, `lint`, `db:migrate`, `db:seed`,
+- [x] `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `.nvmrc`
+- [x] `docker-compose.yml` with `postgres:16-alpine`
+- [x] Turbo task graph: `build`, `typecheck`, `test`, `lint`, `db:migrate`, `db:seed`,
       `conformance`, `check:db-boundary`
-- [ ] `check:db-boundary` — fails if anything outside the store package imports `pg` or
+- [x] `check:db-boundary` — fails if anything outside the store package imports `pg` or
       reads `DATABASE_URL` (invariant 6.3)
 
 **`@sourcing/ontology`**
 
-- [ ] `Tracked<T>`, `Provenance`, confidence conventions
-- [ ] Five object types and five link types, with Zod schemas
+- [x] `Tracked<T>` with nested `verification`, `Provenance` as a discriminated union on
+      `method`, confidence conventions
+- [x] Five object types and five link types, with Zod schemas
+- [x] `ObjectTypeDefinition` derived from the Zod schemas via `z.toJSONSchema()`,
+      including `cardinality`, `required`, `enumValues` and `mutability`.
+      `LinkTypeDefinition` is declared rather than derived: a link type's endpoints are
+      not expressible in the Zod schema of either endpoint
 - [ ] `OntologyContext` port
 - [ ] Minimum-confidence path algebra, unit-tested with no database
 - [ ] `ActionDefinition` with preconditions and `approvalPolicy`
@@ -579,7 +746,11 @@ pollute lineage queries.
       cannot-execute-unapproved constraint, and the approver-required constraint
 - [x] `003_approver_identity.sql`: the `approver_type` column, paired with `approved_by`
       and constrained to `HUMAN`
-- [ ] `004`: the single `schema_versions` row, which can only be written once the object
+- [x] `004_provenance_and_cardinality.sql`: the two provenance `CHECK`s tightened to
+      biconditional on both `object_properties` and `links`, and the partial unique index
+      on `(from_id) WHERE link_type = 'AFFECTS_SUPPLIER'` that makes the many-to-one
+      cardinality in `ONTOLOGY.md` §4 real rather than decorative
+- [ ] `005`: the single `schema_versions` row, which can only be written once the object
       and link type definitions exist in `@sourcing/ontology`
 - [ ] Repository layer — sole writer, Zod validation on every write
 - [ ] Object assembly: EAV rows → `Tracked<T>` objects, arrays via `ordinal`

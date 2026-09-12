@@ -8,16 +8,68 @@
  *
  * This package declares the `OntologyContext` port; `@sourcing/ontology-store-postgres`
  * implements it. The dependency arrow never points the other way.
- *
- * Week 1 contents land here per PLAN.md §9: Tracked<T> and Provenance, the five object
- * types and five link types with their Zod schemas, the path algebra, and the two
- * Actions.
  */
 
+export {
+  confidenceSchema,
+  evidenceShape,
+  provenanceMethodSchema,
+  provenanceSchema,
+  timestampSchema,
+  tracked,
+  VERIFIED_IMPLIES_CERTAIN_MESSAGE,
+  verificationSchema,
+  verifiedImpliesCertain,
+  type Provenance,
+  type ProvenanceMethod,
+  type Tracked,
+  type Verification,
+} from './tracked.js';
+
+export {
+  deviceSchema,
+  objectSchemas,
+  objectTypeNameSchema,
+  partSchema,
+  qualityEventSchema,
+  siteSchema,
+  supplierSchema,
+  type Device,
+  type ObjectTypeName,
+  type Part,
+  type QualityEvent,
+  type Site,
+  type Supplier,
+} from './object-types.js';
+
+export {
+  linkCardinalitySchema,
+  linkSchema,
+  linkTypeDefinitions,
+  linkTypeNames,
+  linkTypeNameSchema,
+  objectTypeNames,
+  type Link,
+  type LinkCardinality,
+  type LinkTypeDefinition,
+  type LinkTypeName,
+} from './link-types.js';
+
+export {
+  deriveObjectTypeDefinition,
+  objectTypeDefinition,
+  objectTypeDefinitions,
+  type Cardinality,
+  type Mutability,
+  type ObjectTypeDefinition,
+  type PropertyDefinition,
+  type ValueType,
+} from './definition.js';
+
 /**
- * The ontology schema version. Written as the single `schema_versions` row by the
- * store's initial migration (PLAN.md §5) and pinned by every consumer, so a store
- * built against an older schema fails loudly instead of writing malformed rows.
+ * The ontology schema version. Written as the single `schema_versions` row and pinned by
+ * every consumer, so a store built against an older schema fails loudly instead of
+ * writing malformed rows.
  */
 export const ONTOLOGY_SCHEMA_VERSION = '0.1.0';
 
