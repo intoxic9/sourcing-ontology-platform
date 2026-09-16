@@ -44,6 +44,7 @@ export {
 
 export {
   linkCardinalitySchema,
+  linkInputSchema,
   linkSchema,
   linkTypeDefinitions,
   linkTypeNames,
@@ -51,6 +52,7 @@ export {
   objectTypeNames,
   type Link,
   type LinkCardinality,
+  type LinkInput,
   type LinkTypeDefinition,
   type LinkTypeName,
 } from './link-types.js';
@@ -70,6 +72,7 @@ export { buildContract, serializeContract, type OntologyContract } from './contr
 
 export {
   betterPath,
+  canonicalTraversalResult,
   CERTAIN,
   collapseToTargets,
   makePath,
@@ -99,5 +102,11 @@ export {
   type InMemoryGraph,
   type InMemoryObject,
 } from './in-memory-context.js';
+
+export {
+  SUPPLY_CHAIN,
+  supplyChainFixture,
+  supplyChainQueries,
+} from './fixture.js';
 
 export { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './constants.js';

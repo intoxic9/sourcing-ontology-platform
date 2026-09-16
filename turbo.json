@@ -31,7 +31,7 @@
     },
     "conformance": {
       "cache": false,
-      "dependsOn": ["^build", "db:seed"],
+      "dependsOn": ["^build", "db:migrate"],
       "env": ["DATABASE_URL"]
     }
   }

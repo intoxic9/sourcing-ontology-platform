@@ -56,14 +56,25 @@ export const linkTypeDefinitions = [
  * `from_type`/`to_type` are not stored — two columns that can drift from the link type
  * that already implies them.
  */
+const linkShape = {
+  linkType: linkTypeNameSchema,
+  fromId: z.string().min(1),
+  toId: z.string().min(1),
+  ...evidenceShape,
+};
+
+/**
+ * A link on its way into storage. No `id`, because the database generates it —
+ * "nobody authors a link ID by hand" (001). Sharing `linkShape` with `linkSchema` keeps
+ * the two from describing different links.
+ */
+export const linkInputSchema = z
+  .strictObject(linkShape)
+  .refine(verifiedImpliesCertain, { error: VERIFIED_IMPLIES_CERTAIN_MESSAGE });
+export type LinkInput = z.infer<typeof linkInputSchema>;
+
 export const linkSchema = z
-  .strictObject({
-    id: z.string().min(1),
-    linkType: linkTypeNameSchema,
-    fromId: z.string().min(1),
-    toId: z.string().min(1),
-    ...evidenceShape,
-  })
+  .strictObject({ id: z.string().min(1), ...linkShape })
   .refine(verifiedImpliesCertain, { error: VERIFIED_IMPLIES_CERTAIN_MESSAGE });
 export type Link = z.infer<typeof linkSchema>;
 

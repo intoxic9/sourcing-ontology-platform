@@ -57,8 +57,8 @@ function deferred<T>(compute: () => T): Promise<T> {
  *
  * Built on the same `makePath` and `collapseToTargets` the rest of the core uses, so it
  * is a reference implementation rather than a second one. The recursive CTE in the store
- * package is where a genuine disagreement could hide, and the conformance check over
- * seeded data is where the two get compared.
+ * package is where a genuine disagreement could hide, and the conformance check runs the
+ * same fixture through both.
  *
  * The walk enumerates simple paths, which is exponential in a dense graph. Acceptable
  * for fixtures bounded by `maxDepth`; Postgres does the real one.

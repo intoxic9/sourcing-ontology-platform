@@ -408,6 +408,12 @@ These are not conventions. They are the properties the system's claims rest on.
    assertion: parsing the literal back out of the migration file would be a second,
    more brittle check of the same fact, and the stored row is what actually matters.
 
+   **And it fails if the in-memory walk and the Postgres CTE disagree on any
+   `TraversalResult` for the shared fixture**, including `truncated` and `pathCount`.
+   Two implementations that agree on the easy cases and disagree on truncation is the
+   exact failure this exists to catch. The queries are chosen to spend most of their
+   time around the depth cap.
+
 3. **The store package is the only holder of database credentials, enforced in CI.** A
    check fails the build if anything outside `@sourcing/ontology-store-postgres` imports
    `pg` or reads `DATABASE_URL` — including `apps/api` and every script. Invariant 1 is
@@ -719,6 +725,17 @@ the first is a number, and collapsing them would make the risk answer dishonest.
 applied to `schema_versions`: "no such supplier" and "this supplier affects nothing" must
 not look alike.
 
+### Truncation is a post-condition on the CTE, not a recursive-term problem
+
+The recursive walk stops at `depth < maxDepth`, the same way the in-memory DFS returns
+when `steps.length >= maxDepth`. Whether that stop left work undone is a separate
+`EXISTS`: an eligible edge from any walk row that sat at the cap, to a node not already
+on that row's path. Same join, same cycle predicate as the recursive term. Not awkward
+once it is not asked to live inside the recursion.
+
+Path confidence stays with `makePath`. A running `LEAST(...)` in SQL would be a second
+owner of the same function.
+
 ### Promise-returning context methods reject, they never throw synchronously
 
 Found by the tests rather than by design. The in-memory context computes synchronously,
@@ -902,15 +919,23 @@ pollute lineage queries.
 - [x] `005_schema_version.sql`: the single `schema_versions` row, payload as a reviewed
       literal. Opens the `objects.schema_version` FK gate that has blocked every insert
       until now
-- [ ] Repository layer — sole writer, Zod validation on every write
-- [ ] Object assembly: EAV rows → `Tracked<T>` objects, arrays via `ordinal`
-- [ ] Recursive-CTE traversal with `LEAST(...)` accumulation and cycle detection
-- [ ] `maxDepth` parameter defaulting to 6, with a `truncated` flag in the result
+- [x] Repository layer — sole writer, Zod validation on every write
+- [x] Object assembly: EAV rows → `Tracked<T>` objects, arrays via `ordinal`
+- [x] Recursive-CTE traversal with cycle detection. Path confidence is still the
+      minimum along the path; it is computed by `makePath` from the step array rather
+      than as a running `LEAST(...)` in SQL, so the CTE cannot silently implement a
+      second copy of the algebra
+- [x] `maxDepth` parameter defaulting to 6, with a `truncated` flag in the result.
+      Truncation is a post-condition on the CTE: an eligible unused edge from any walk
+      row that sat at the cap
 - [ ] Audit write in the same transaction as every mutation
 - [ ] Audit history query for any object
 - [ ] Seed: ~20 suppliers, ~60 parts, ~10 devices, 3 sites, plus quality events
-- [ ] Conformance check over the seeded database, including a non-empty
-      `schema_versions` assertion
+- [x] Conformance check: `schema_versions` non-empty and equal to the definitions;
+      the shared fixture run through both implementations, asserting the full
+      `TraversalResult` including `truncated` and `pathCount`. Remaining: the same
+      check over the seeded database, plus "every audit record addresses at least one
+      object"
 
 **`apps/api`**
 

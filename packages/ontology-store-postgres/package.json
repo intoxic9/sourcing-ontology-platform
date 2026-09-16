@@ -20,7 +20,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint .",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "tsx src/migrate.ts",
+    "conformance": "tsx src/conformance.ts"
   },
   "dependencies": {
     "@sourcing/ontology": "workspace:*",

@@ -1,114 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { UnknownObjectError, type OntologyContext } from './context.js';
-import { createInMemoryContext, type InMemoryObject } from './in-memory-context.js';
-import type { Link, LinkTypeName } from './link-types.js';
-import type { Tracked } from './tracked.js';
+import { SUPPLY_CHAIN, supplyChainFixture } from './fixture.js';
+import { createInMemoryContext } from './in-memory-context.js';
 import { weakestLink } from './traversal.js';
-
-const AT = '2026-01-15T09:30:00Z';
-
-const provenance = {
-  method: 'DIRECT',
-  sourceSystem: 'SAP',
-  sourceRecordId: 'rec-1',
-  pipelineRunId: 'run-1',
-  extractedAt: AT,
-} as const;
-
-/** `const` type parameter so enum literals stay literal instead of widening to string. */
-const t = <const T>(value: T, confidence = 1): Tracked<T> => ({ value, confidence, provenance });
-
-const supplier = (id: string): InMemoryObject => ({
-  objectType: 'SUPPLIER',
-  data: {
-    id,
-    legalName: t(`Supplier ${id}`),
-    country: t('DE'),
-    tier: t('TIER_1'),
-    status: t('APPROVED'),
-    qualityRating: t(80),
-    certifications: [],
-  },
-});
-
-const part = (id: string): InMemoryObject => ({
-  objectType: 'PART',
-  data: {
-    id,
-    partNumber: t(id.toUpperCase()),
-    description: t('a part'),
-    classification: t('COMPONENT'),
-    criticality: t('MAJOR'),
-    requiresRequalification: t(false),
-    unitCost: t(12.5),
-  },
-});
-
-const device = (id: string): InMemoryObject => ({
-  objectType: 'DEVICE',
-  data: {
-    id,
-    deviceName: t(`Device ${id}`),
-    productFamily: t('Infusion'),
-    regulatoryClass: t('CLASS_II'),
-    lifecycleStage: t('ACTIVE'),
-  },
-});
-
-const qualityEvent = (id: string): InMemoryObject => ({
-  objectType: 'QUALITY_EVENT',
-  data: {
-    id,
-    eventType: t('AUDIT_FINDING'),
-    severity: t('CRITICAL'),
-    openedAt: t(AT),
-    description: t('finding'),
-  },
-});
-
-const link = (
-  linkType: LinkTypeName,
-  fromId: string,
-  toId: string,
-  confidence: number,
-): Link => ({ id: `${linkType}:${fromId}->${toId}`, linkType, fromId, toId, confidence, provenance });
-
-/**
- * sup-1 --SUPPLIES(0.9)--> part-1 <--COMPOSED_OF(0.8)-- dev-1
- * sup-1 --SUPPLIES(0.5)--> part-2 <--COMPOSED_OF(0.95)- dev-1
- *
- * Two routes to dev-1 with different weakest links, so the max-of-min rule is visible.
- * dev-2 hangs off part-3, which nobody supplies, and is only reachable by detouring
- * through the quality event — the exact wrong answer `via` exists to prevent.
- */
-const SUPPLY_CHAIN: readonly LinkTypeName[] = ['SUPPLIES', 'COMPOSED_OF'];
 
 let context: OntologyContext;
 
 beforeEach(() => {
-  context = createInMemoryContext({
-    objects: [
-      supplier('sup-1'),
-      supplier('sup-2'),
-      part('part-1'),
-      part('part-2'),
-      part('part-3'),
-      device('dev-1'),
-      device('dev-2'),
-      qualityEvent('ev-1'),
-    ],
-    links: [
-      link('SUPPLIES', 'sup-1', 'part-1', 0.9),
-      link('SUPPLIES', 'sup-1', 'part-2', 0.5),
-      link('SUPPLIES', 'sup-2', 'part-1', 0.6),
-      link('COMPOSED_OF', 'dev-1', 'part-1', 0.8),
-      link('COMPOSED_OF', 'dev-1', 'part-2', 0.95),
-      link('COMPOSED_OF', 'dev-2', 'part-3', 1),
-      link('AFFECTS_SUPPLIER', 'ev-1', 'sup-1', 1),
-      link('AFFECTS_PART', 'ev-1', 'part-3', 1),
-    ],
-  });
+  context = createInMemoryContext(supplyChainFixture);
 });
 
 const affectedDevices = (maxDepth?: number) =>
@@ -123,6 +23,7 @@ describe('getObject', () => {
   it('returns the object typed as the caller asked for it', async () => {
     const found = await context.getObject('SUPPLIER', 'sup-1');
     expect(found?.legalName.value).toBe('Supplier sup-1');
+    expect(found?.certifications).toHaveLength(2);
   });
 
   it('returns undefined for an id that is not there', async () => {
@@ -220,6 +121,14 @@ describe('depth cap', () => {
     // A device is two hops away, so nothing is found — but "nothing found" here means
     // unknown, not safe, which is the whole reason the flag exists.
     expect(targets).toStrictEqual([]);
+    expect(truncated).toBe(true);
+  });
+
+  it('is truncated at the exact depth of the match, because the cap still has uncrossed edges', async () => {
+    // At depth 2 we have found dev-1, but from the device the other COMPOSED_OF edge
+    // still leads to the other part. That is the lower-bound case the type documents.
+    const { targets, truncated } = await affectedDevices(2);
+    expect(targets.map((entry) => entry.target.id)).toStrictEqual(['dev-1']);
     expect(truncated).toBe(true);
   });
 

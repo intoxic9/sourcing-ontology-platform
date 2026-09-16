@@ -154,6 +154,16 @@ describe('collapseToTargets', () => {
   it('returns nothing for no paths, rather than a zero-confidence target', () => {
     expect(collapseToTargets([])).toStrictEqual([]);
   });
+
+  it('picks the same bestPath regardless of input order', () => {
+    // Equal confidence, equal length: the signature, not arrival order, decides.
+    const left = makePath(source, [step(node('dev-a', 'DEVICE'), 0.7)]);
+    const right = makePath(source, [step(node('dev-b', 'DEVICE'), 0.7)]);
+
+    expect(collapseToTargets([left, right]).map((entry) => entry.target.id)).toStrictEqual(
+      collapseToTargets([right, left]).map((entry) => entry.target.id),
+    );
+  });
 });
 
 describe('resolveMaxDepth', () => {

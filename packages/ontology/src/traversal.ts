@@ -169,6 +169,39 @@ export function betterPath(a: Path, b: Path): Path {
   return a.steps.length <= b.steps.length ? a : b;
 }
 
+/**
+ * Identifies a path by the edges it crossed, without using `linkId`.
+ *
+ * The in-memory fixture authors link ids; Postgres generates UUIDs. A signature that
+ * included `linkId` would make the two implementations disagree on `bestPath` whenever
+ * two routes tied, which is exactly the disagreement the conformance check exists to
+ * catch — and it would be a false one. `(linkType, direction, to)` uniquely identifies
+ * an edge from a given node: `links` is unique on `(link_type, from_id, to_id)`.
+ */
+function pathSignature(path: Path): string {
+  return path.steps
+    .map((step) => `${step.linkType}:${step.direction}:${step.to.id}`)
+    .join('>');
+}
+
+/**
+ * A total order over paths, best first.
+ *
+ * The signature tiebreak exists for cross-implementation agreement rather than for
+ * looks. Two paths can tie on both confidence and length, and then "the best path"
+ * would otherwise be whichever the caller happened to supply first — a depth-first walk
+ * and a SQL result set do not enumerate in the same order, so the two would disagree on
+ * `bestPath` while agreeing on everything else.
+ */
+function comparePaths(a: Path, b: Path): number {
+  if (a.confidence !== b.confidence) return b.confidence - a.confidence;
+  if (a.steps.length !== b.steps.length) return a.steps.length - b.steps.length;
+
+  const left = pathSignature(a);
+  const right = pathSignature(b);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function compareTargets(a: AffectedTarget, b: AffectedTarget): number {
   if (a.confidence !== b.confidence) return b.confidence - a.confidence;
   if (a.bestPath.steps.length !== b.bestPath.steps.length) {
@@ -191,11 +224,14 @@ function compareTargets(a: AffectedTarget, b: AffectedTarget): number {
  * Collapsing here is also what bounds the result. `maxDepth` limits how far the search
  * walks but does nothing about path *count*, which is where a dense BOM graph explodes;
  * one path per target bounds the output at the number of reachable nodes.
+ *
+ * Independent of the order paths arrive in, so the in-memory walk and the recursive CTE
+ * produce identical results from identical data.
  */
 export function collapseToTargets(paths: readonly Path[]): AffectedTarget[] {
   const grouped = new Map<string, { target: PathNode; bestPath: Path; pathCount: number }>();
 
-  for (const path of paths) {
+  for (const path of [...paths].sort(comparePaths)) {
     const target = pathTarget(path);
     const existing = grouped.get(target.id);
 
@@ -215,6 +251,36 @@ export function collapseToTargets(paths: readonly Path[]): AffectedTarget[] {
       pathCount,
     }))
     .sort(compareTargets);
+}
+
+/**
+ * The comparison shape for a `TraversalResult`.
+ *
+ * `linkId` is stripped because it is assigned by storage, not by the walk. Everything
+ * else that a risk answer depends on is here: targets, confidences, `pathCount`,
+ * `truncated`, `maxDepth`, the steps of the best path, and `weakestStepIndex`.
+ */
+export function canonicalTraversalResult(result: TraversalResult): unknown {
+  return {
+    truncated: result.truncated,
+    maxDepth: result.maxDepth,
+    targets: result.targets.map((entry) => ({
+      target: entry.target,
+      confidence: entry.confidence,
+      pathCount: entry.pathCount,
+      bestPath: {
+        from: entry.bestPath.from,
+        confidence: entry.bestPath.confidence,
+        weakestStepIndex: entry.bestPath.weakestStepIndex,
+        steps: entry.bestPath.steps.map((step) => ({
+          linkType: step.linkType,
+          direction: step.direction,
+          confidence: step.confidence,
+          to: step.to,
+        })),
+      },
+    })),
+  };
 }
 
 export function resolveMaxDepth(maxDepth: number | undefined): number {

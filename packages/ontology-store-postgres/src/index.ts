@@ -4,15 +4,11 @@
  *
  * Two invariants converge on this package (PLAN.md §6):
  *
- *   1. Nothing writes to `object_property` except through the repository layer here.
+ *   1. Nothing writes to `object_properties` except through the repository layer here.
  *      The EAV model gives up database-level type constraints, so Zod validation on the
  *      way in is the *only* guarantee that stored rows match the schema.
  *   2. No code outside this package imports `pg` or reads `DATABASE_URL`. Enforced by
  *      `pnpm check:db-boundary`, because an unenforced invariant is a convention.
- *
- * Week 1 contents land here per PLAN.md §9: the five-table migration, the repository
- * layer, EAV object assembly, and the recursive-CTE traversal with `LEAST(...)`
- * accumulation, a `maxDepth` cap and a `truncated` flag.
  */
 import { ONTOLOGY_SCHEMA_VERSION } from '@sourcing/ontology';
 
@@ -22,3 +18,12 @@ import { ONTOLOGY_SCHEMA_VERSION } from '@sourcing/ontology';
  * startup failure rather than as silently malformed writes.
  */
 export const SUPPORTED_SCHEMA_VERSION: string = ONTOLOGY_SCHEMA_VERSION;
+
+export { createPostgresContext } from './context.js';
+export {
+  assertSupportedSchema,
+  insertGraph,
+  insertLink,
+  insertObject,
+  type Queryable,
+} from './repository.js';
