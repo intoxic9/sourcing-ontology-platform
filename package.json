@@ -20,7 +20,8 @@
     "db:logs": "docker compose logs -f postgres",
     "db:migrate": "turbo run db:migrate",
     "db:seed": "turbo run db:seed",
-    "conformance": "turbo run conformance"
+    "conformance": "turbo run conformance",
+    "demo": "turbo run demo"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

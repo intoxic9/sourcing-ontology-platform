@@ -21,9 +21,17 @@ export const SUPPORTED_SCHEMA_VERSION: string = ONTOLOGY_SCHEMA_VERSION;
 
 export { createPostgresContext } from './context.js';
 export {
+  approveAction,
+  executeProposedAs,
+  objectAuditHistory,
+  proposeAction,
+} from './governance.js';
+export {
   assertSupportedSchema,
+  auditHistoryForObject,
   insertGraph,
   insertLink,
   insertObject,
+  updateProperty,
   type Queryable,
 } from './repository.js';

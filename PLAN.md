@@ -888,10 +888,10 @@ pollute lineage queries.
       confidence wins, ties go to the shorter path because fewer inferential hops are
       easier to audit. The in-memory context is built on these, so it is a reference
       implementation rather than a second one
-- [ ] `ActionDefinition` with preconditions and `approvalPolicy`
-- [ ] `approveSupplierChange` — legal transitions; `APPROVED` requires valid ISO 13485
+- [x] `ActionDefinition` with preconditions and `approvalPolicy`
+- [x] `approveSupplierChange` — legal transitions; `APPROVED` requires valid ISO 13485
       and no open `CRITICAL` QualityEvent; requires approval
-- [ ] `flagPartForRequalification` — requires a linked QualityEvent or supplier status
+- [x] `flagPartForRequalification` — requires a linked QualityEvent or supplier status
       change; approval for `CRITICAL`, auto-apply for `MINOR`
 - [x] In-memory `OntologyContext` for tests
 - [x] JSON Schema emit to `contracts/ontology.schema.json`, with a `--check` mode that
@@ -928,14 +928,17 @@ pollute lineage queries.
 - [x] `maxDepth` parameter defaulting to 6, with a `truncated` flag in the result.
       Truncation is a post-condition on the CTE: an eligible unused edge from any walk
       row that sat at the cap
-- [ ] Audit write in the same transaction as every mutation
-- [ ] Audit history query for any object
-- [ ] Seed: ~20 suppliers, ~60 parts, ~10 devices, 3 sites, plus quality events
+- [x] Audit write in the same transaction as every mutation
+- [x] Audit history query for any object
+- [x] Seed: ~20 suppliers, ~60 parts, ~10 devices, 3 sites, plus quality events, with a
+      deliberate confidence spread below 0.7 so the review queue and weakest-link
+      output have real content
 - [x] Conformance check: `schema_versions` non-empty and equal to the definitions;
       the shared fixture run through both implementations, asserting the full
       `TraversalResult` including `truncated` and `pathCount`. Remaining: the same
       check over the seeded database, plus "every audit record addresses at least one
-      object"
+      object" (ingest and Action writes already address objects; the assertion over
+      the seeded database is the leftover)
 
 **`apps/api`**
 
@@ -949,12 +952,12 @@ pollute lineage queries.
 
 **Done criteria (from `ONTOLOGY.md` §8, as amended)**
 
-- [ ] Schema defined and persisted; Postgres tables in place
-- [ ] Typed TypeScript access to the ontology
-- [ ] Supplier → affected devices returns the path and its weakest confidence link
-- [ ] Both Actions implemented with preconditions and approval routing
-- [ ] Audit history queryable for any object
-- [ ] Seed data thin but real
+- [x] Schema defined and persisted; Postgres tables in place
+- [x] Typed TypeScript access to the ontology
+- [x] Supplier → affected devices returns the path and its weakest confidence link
+- [x] Both Actions implemented with preconditions and approval routing
+- [x] Audit history queryable for any object
+- [x] Seed data thin but real
 
 ---
 

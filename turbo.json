@@ -33,6 +33,11 @@
       "cache": false,
       "dependsOn": ["^build", "db:migrate"],
       "env": ["DATABASE_URL"]
+    },
+    "demo": {
+      "cache": false,
+      "dependsOn": ["^build", "db:seed"],
+      "env": ["DATABASE_URL"]
     }
   }
 }

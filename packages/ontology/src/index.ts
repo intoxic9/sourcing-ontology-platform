@@ -109,4 +109,36 @@ export {
   supplyChainQueries,
 } from './fixture.js';
 
+export {
+  AgentExecutionBlockedError,
+  actorTypeSchema,
+  auditStatusSchema,
+  checkPreconditions,
+  PreconditionsFailedError,
+  routingDecision,
+  type ActionDefinition,
+  type Actor,
+  type ActorType,
+  type ApprovalDecision,
+  type AuditRecord,
+  type AuditStatus,
+  type ObjectMutation,
+  type ValidationResult,
+} from './action.js';
+
+export { actionByName, actions, type ActionName } from './actions.js';
+
+export {
+  approveSupplierChange,
+  approveSupplierChangeInputSchema,
+  type ApproveSupplierChangeInput,
+  type SupplierStatus,
+} from './approve-supplier-change.js';
+
+export {
+  flagPartForRequalification,
+  flagPartForRequalificationInputSchema,
+  type FlagPartForRequalificationInput,
+} from './flag-part.js';
+
 export { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './constants.js';

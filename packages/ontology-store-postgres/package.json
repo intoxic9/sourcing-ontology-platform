@@ -21,7 +21,9 @@
     "test": "vitest run",
     "lint": "eslint .",
     "db:migrate": "tsx src/migrate.ts",
-    "conformance": "tsx src/conformance.ts"
+    "db:seed": "tsx src/seed.ts",
+    "conformance": "tsx src/conformance.ts",
+    "demo": "tsx src/demo.ts"
   },
   "dependencies": {
     "@sourcing/ontology": "workspace:*",
