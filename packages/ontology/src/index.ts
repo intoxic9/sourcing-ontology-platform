@@ -68,4 +68,36 @@ export {
 
 export { buildContract, serializeContract, type OntologyContract } from './contract.js';
 
+export {
+  betterPath,
+  CERTAIN,
+  collapseToTargets,
+  makePath,
+  pathConfidence,
+  pathTarget,
+  resolveMaxDepth,
+  weakestLink,
+  weakestStepIndex,
+  type AffectedTarget,
+  type Path,
+  type PathNode,
+  type PathStep,
+  type StepDirection,
+  type TraversalQuery,
+  type TraversalResult,
+} from './traversal.js';
+
+export {
+  UnknownObjectError,
+  type LinkQuery,
+  type ObjectOf,
+  type OntologyContext,
+} from './context.js';
+
+export {
+  createInMemoryContext,
+  type InMemoryGraph,
+  type InMemoryObject,
+} from './in-memory-context.js';
+
 export { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './constants.js';

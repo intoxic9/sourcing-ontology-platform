@@ -645,6 +645,90 @@ already visible in the JSON Schema — `type: "array"` and the `mutability` keyw
 `.meta()` — which is the same property that lets `ObjectTypeDefinition` be derived
 rather than declared.
 
+### Traversal result shape
+
+`Path` is `{ from, steps, confidence, weakestStepIndex }`, where each step is
+`{ linkId, linkType, direction, confidence, to }`. Steps rather than parallel node and
+edge arrays, so the "N steps, N+1 nodes" relationship cannot be violated by a malformed
+result.
+
+`direction` is `ALONG | AGAINST`, relative to the link type's declared direction, and it
+is not optional decoration: `ONTOLOGY.md` §4's critical path is
+`Supplier --SUPPLIES--> Part <--COMPOSED_OF-- Device`, so reaching a device means walking
+`COMPOSED_OF` backwards. Every hop is a union of both directions, which is what
+`links_from_idx` and `links_to_idx` are both for.
+
+The weakest link is stored as `weakestStepIndex`, not as a copy of the step. The
+invariant `steps[weakestStepIndex].confidence === confidence` is what makes the answer
+auditable, and a second copy is a second thing that can disagree. The core exports a
+`weakestLink(path)` helper so calling code still reads naturally. Ties go to the first
+occurrence, stated rather than left to sort stability.
+
+### One best path per target, and confidence across paths is the maximum
+
+`TraversalResult` is `{ targets, truncated, maxDepth }` where each target carries its
+`bestPath` and a `pathCount`.
+
+Returning every path would reintroduce the problem the depth cap was added for. A depth
+cap bounds how far the search walks; it does **not** bound path count, which is where a
+dense BOM graph explodes. Collapsing to one path per target bounds the output at
+O(reachable nodes). Exploration is still capped by `maxDepth`; it is the result that
+collapses.
+
+Where a target is reachable by several routes, its confidence is the **maximum** over
+paths of the **minimum** along each path. If a supplier reaches a device through three
+parts, our confidence that the device is affected is the best chain — not the worst, and
+not a combination. This is the same conservatism as taking the minimum along a path: a
+product would deflate, a noisy-OR would inflate, and the maximum never claims more than
+the single best piece of end-to-end evidence.
+
+### `truncated` describes the search, not any path
+
+It sits on the result rather than on each path. Every returned path is real and complete;
+what is missing is what was never explored.
+
+Two consequences to state in the API docs rather than let someone discover:
+
+1. **A target's absence means different things depending on the flag.** Absent with
+   `truncated: false` is "not reachable in the data we hold". Absent with
+   `truncated: true` is "unknown — there may be a path beyond the cap". For a risk tool
+   these are not interchangeable.
+2. **When `truncated` is true the reported confidences are lower bounds.** A two-hop
+   route with one 0.4 link is worse than an eight-hop route where every link is 0.95, so
+   a target found inside the cap may have a better path outside it. Truncation does not
+   only mean "there may be more targets", it means "these numbers may be pessimistic".
+
+### The degenerate cases, decided rather than discovered
+
+**A zero-step path has confidence 1.0.** Minimum over an empty set is the identity for
+minimum, which at the top of a 0–1 scale is 1.0. This is forced rather than chosen: path
+confidence has to compose, so `conf(p1 ++ p2) = min(conf(p1), conf(p2))` must hold, and
+if the empty path were below 1.0 then prepending it would weaken the path it was
+prepended to. `weakestStepIndex` is `null`, which is the only case where it is null.
+
+Separately, **the query excludes the source from its own results**, because "supplier S
+affects supplier S" is true and useless. Keeping that apart from the algebra matters: the
+algebra stays total and clean, and the exclusion is query ergonomics rather than a hole
+in the maths.
+
+**No path means the target is absent, never confidence 0.** Confidence 0 means "a chain
+exists and the evidence for it is worthless"; absence means "no chain was found". Only
+the first is a number, and collapsing them would make the risk answer dishonest.
+
+**An unknown source id is an error, not an empty result** — the same principle already
+applied to `schema_versions`: "no such supplier" and "this supplier affects nothing" must
+not look alike.
+
+### Promise-returning context methods reject, they never throw synchronously
+
+Found by the tests rather than by design. The in-memory context computes synchronously,
+so its first version threw before a promise existed — which means a caller writing
+`ctx.traverse(q).catch(...)` would have taken an uncaught exception instead of the
+`catch`. Every method now routes through a `deferred` helper that converts a throw into
+a rejection. The Postgres implementation gets this for free by being genuinely async,
+but the port's contract is the same for both and is worth stating: a method typed
+`Promise<T>` reports every failure as a rejection.
+
 ### Kept despite the pressure to cut
 
 `Tracked<T>` on every property, because retrofitting provenance is the one thing that
@@ -741,6 +825,12 @@ pollute lineage queries.
   ingestion has not faced yet, and guessing it here would be a constraint invented ahead
   of the data.
 
+- §4 fixes path confidence as the minimum along a path but is **silent on multiple paths
+  to the same target**. Fixed here as the maximum over paths of the minimum along each,
+  with one best path returned per target. The contract's rule is unchanged; this settles
+  a case it does not cover, and leaving it unsettled would mean the headline number in
+  the demo had no defined meaning whenever two routes exist.
+
 - §4, `AFFECTS_SUPPLIER`'s **many-to-one cardinality is enforced** by a partial unique
   index on `links (from_id) WHERE link_type = 'AFFECTS_SUPPLIER'` (`004`). The `from_id`
   is the quality event, so each event names at most one supplier while many events may
@@ -771,14 +861,22 @@ pollute lineage queries.
       including `cardinality`, `required`, `enumValues` and `mutability`.
       `LinkTypeDefinition` is declared rather than derived: a link type's endpoints are
       not expressible in the Zod schema of either endpoint
-- [ ] `OntologyContext` port
-- [ ] Minimum-confidence path algebra, unit-tested with no database
+- [x] `OntologyContext` port: `getObject(objectType, id)` typed by the caller's
+      expectation, `getLinks`, and `traverse`. Read-only until the Action layer adds
+      writes. `TraversalQuery` carries `via` — without a link-type filter a supplier
+      reaches devices through a quality event, which is a different claim and would make
+      the confidence number meaningless
+- [x] Minimum-confidence path algebra, unit-tested with no database:
+      `pathConfidence(steps)`, `weakestLink(path)`, and `betterPath(a, b)` — higher
+      confidence wins, ties go to the shorter path because fewer inferential hops are
+      easier to audit. The in-memory context is built on these, so it is a reference
+      implementation rather than a second one
 - [ ] `ActionDefinition` with preconditions and `approvalPolicy`
 - [ ] `approveSupplierChange` — legal transitions; `APPROVED` requires valid ISO 13485
       and no open `CRITICAL` QualityEvent; requires approval
 - [ ] `flagPartForRequalification` — requires a linked QualityEvent or supplier status
       change; approval for `CRITICAL`, auto-apply for `MINOR`
-- [ ] In-memory `OntologyContext` for tests
+- [x] In-memory `OntologyContext` for tests
 - [x] JSON Schema emit to `contracts/ontology.schema.json`, with a `--check` mode that
       fails on drift
 
