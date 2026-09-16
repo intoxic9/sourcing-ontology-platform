@@ -4,6 +4,7 @@
  */
 import {
   AgentExecutionBlockedError,
+  SUPPLIER_DEVICE_RISK,
   weakestLink,
   type PathStep,
 } from '@sourcing/ontology';
@@ -12,9 +13,11 @@ import { Pool } from 'pg';
 import { createPostgresContext } from './context.js';
 import { requireDatabaseUrl } from './env.js';
 import { approveAction, executeProposedAs, objectAuditHistory, proposeAction } from './governance.js';
-import { DEMO_SUPPLIER_ACTION, DEMO_SUPPLIER_RISK } from './seed-data.js';
-
-const SUPPLY_CHAIN = ['SUPPLIES', 'COMPOSED_OF'] as const;
+import {
+  DEMO_HELIX_DEVICE,
+  DEMO_SUPPLIER_ACTION,
+  DEMO_SUPPLIER_RISK,
+} from './seed-data.js';
 
 function hop(step: PathStep): string {
   const arrow = step.direction === 'ALONG' ? '-->' : '<--';
@@ -38,13 +41,18 @@ try {
 
   const result = await ctx.traverse({
     from: { objectType: 'SUPPLIER', id: helix.id },
-    to: 'DEVICE',
-    via: SUPPLY_CHAIN,
+    profile: SUPPLIER_DEVICE_RISK,
   });
 
-  console.log(
-    `affected devices: ${String(result.targets.length)}  truncated: ${String(result.truncated)}`,
-  );
+  const affectedIds = result.targets.map((entry) => entry.target.id).sort();
+  if (affectedIds.length !== 1 || affectedIds[0] !== DEMO_HELIX_DEVICE) {
+    console.log(
+      `ERROR: expected exactly ${DEMO_HELIX_DEVICE}, got: ${affectedIds.join(', ') || '(none)'}`,
+    );
+    process.exitCode = 1;
+  }
+
+  console.log(`affected devices: ${String(result.targets.length)}`);
 
   for (const target of result.targets) {
     const device = await ctx.getObject('DEVICE', target.target.id);

@@ -78,7 +78,6 @@ export {
   makePath,
   pathConfidence,
   pathTarget,
-  resolveMaxDepth,
   weakestLink,
   weakestStepIndex,
   type AffectedTarget,
@@ -89,6 +88,18 @@ export {
   type TraversalQuery,
   type TraversalResult,
 } from './traversal.js';
+
+export {
+  assertValidTraversalProfile,
+  objectTypeAfterStep,
+  SUPPLIER_DEVICE_RISK,
+  terminalObjectType,
+  type PathPattern,
+  type PathStepSpec,
+  type TraversalProfile,
+} from './profiles.js';
+
+export { enumeratePatternPaths, type PatternWalkGraph } from './pattern-walk.js';
 
 export {
   UnknownObjectError,
@@ -104,9 +115,10 @@ export {
 } from './in-memory-context.js';
 
 export {
-  SUPPLY_CHAIN,
+  patternConformanceCases,
+  sharedPartBridgeFixture,
   supplyChainFixture,
-  supplyChainQueries,
+  type PatternConformanceCase,
 } from './fixture.js';
 
 export {
@@ -141,4 +153,4 @@ export {
   type FlagPartForRequalificationInput,
 } from './flag-part.js';
 
-export { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './constants.js';
+export { ONTOLOGY_SCHEMA_VERSION } from './constants.js';

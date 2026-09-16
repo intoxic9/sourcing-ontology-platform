@@ -6,13 +6,10 @@ import {
 } from './context.js';
 import type { Link } from './link-types.js';
 import type { ObjectTypeName } from './object-types.js';
+import { enumeratePatternPaths } from './pattern-walk.js';
 import {
   collapseToTargets,
-  makePath,
-  resolveMaxDepth,
-  type Path,
   type PathNode,
-  type PathStep,
   type StepDirection,
   type TraversalQuery,
   type TraversalResult,
@@ -56,12 +53,9 @@ function deferred<T>(compute: () => T): Promise<T> {
  * zod and nothing else (PLAN.md §4).
  *
  * Built on the same `makePath` and `collapseToTargets` the rest of the core uses, so it
- * is a reference implementation rather than a second one. The recursive CTE in the store
- * package is where a genuine disagreement could hide, and the conformance check runs the
- * same fixture through both.
- *
- * The walk enumerates simple paths, which is exponential in a dense graph. Acceptable
- * for fixtures bounded by `maxDepth`; Postgres does the real one.
+ * is a reference implementation rather than a second one. The pattern-shaped SQL in the
+ * store package is where a genuine disagreement could hide, and the conformance check
+ * runs the same fixture through both.
  */
 export function createInMemoryContext(graph: InMemoryGraph): OntologyContext {
   const objects = new Map<string, InMemoryObject>();
@@ -77,82 +71,29 @@ export function createInMemoryContext(graph: InMemoryGraph): OntologyContext {
   };
 
   for (const link of graph.links) {
-    // Both directions, because reaching a Device from a Part means crossing
-    // COMPOSED_OF against its declared direction.
     connect(link.fromId, { link, direction: 'ALONG', otherId: link.toId });
     connect(link.toId, { link, direction: 'AGAINST', otherId: link.fromId });
   }
 
-  const nodeOf = (id: string): PathNode => {
-    const record = objects.get(id);
-    if (record === undefined) {
-      // Postgres has foreign keys for this; a fixture does not, and a link into
-      // nowhere would otherwise surface as a silently missing path.
-      throw new Error(`in-memory graph has a link to unknown object ${id}`);
-    }
-    return { id, objectType: record.objectType };
+  const walkGraph = {
+    objectTypeOf(id: string): ObjectTypeName | undefined {
+      return objects.get(id)?.objectType;
+    },
+    edgesFrom(nodeId: string): readonly Edge[] {
+      return adjacency.get(nodeId) ?? [];
+    },
   };
 
   function traverse(query: TraversalQuery): TraversalResult {
-    const maxDepth = resolveMaxDepth(query.maxDepth);
-
-    if (query.via.length === 0) {
-      // Returning "nothing is at risk" for a query that can cross no edges is the most
-      // dangerous possible answer to get silently wrong.
-      throw new RangeError('traverse requires at least one link type in `via`');
-    }
-
     const record = objects.get(query.from.id);
     if (record === undefined || record.objectType !== query.from.objectType) {
       throw new UnknownObjectError(query.from.objectType, query.from.id);
     }
 
     const source: PathNode = { id: query.from.id, objectType: query.from.objectType };
-    const via = new Set(query.via);
+    const paths = enumeratePatternPaths(source, query.profile, walkGraph);
 
-    const found: Path[] = [];
-    const steps: PathStep[] = [];
-    // Seeded with the source, which both detects cycles and is what keeps the source
-    // out of its own results — "supplier S affects supplier S" needs no special case.
-    const onPath = new Set<string>([source.id]);
-    let truncated = false;
-
-    const walk = (nodeId: string): void => {
-      const continuations = (adjacency.get(nodeId) ?? []).filter(
-        (edge) => via.has(edge.link.linkType) && !onPath.has(edge.otherId),
-      );
-
-      if (steps.length >= maxDepth) {
-        // Stopping with somewhere left to go is exactly what `truncated` reports.
-        if (continuations.length > 0) truncated = true;
-        return;
-      }
-
-      for (const edge of continuations) {
-        const to = nodeOf(edge.otherId);
-
-        steps.push({
-          linkId: edge.link.id,
-          linkType: edge.link.linkType,
-          direction: edge.direction,
-          confidence: edge.link.confidence,
-          to,
-        });
-        onPath.add(to.id);
-
-        if (to.objectType === query.to) found.push(makePath(source, [...steps]));
-
-        // Keep going past a match: a device can lead onward to a site.
-        walk(to.id);
-
-        onPath.delete(to.id);
-        steps.pop();
-      }
-    };
-
-    walk(source.id);
-
-    return { targets: collapseToTargets(found), truncated, maxDepth };
+    return { targets: collapseToTargets(paths), profile: query.profile };
   }
 
   return {
@@ -162,8 +103,6 @@ export function createInMemoryContext(graph: InMemoryGraph): OntologyContext {
         if (record === undefined) return undefined;
         if (record.objectType !== objectType) throw new UnknownObjectError(objectType, id);
 
-        // The runtime check above establishes this, but TypeScript cannot narrow a
-        // union to a generic parameter through a comparison.
         return record.data as ObjectOf<T>;
       }),
 

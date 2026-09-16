@@ -7,12 +7,3 @@
  * index.ts re-exports the contract emit; importing it from there would be a cycle.
  */
 export const ONTOLOGY_SCHEMA_VERSION = '0.1.0';
-
-/**
- * Default depth cap for graph traversal, and the reason it exists: cycle detection via
- * the path array stops a loop revisiting a node, but a dense BOM graph is acyclic and
- * can still fan out combinatorially. Callers get a `truncated` flag when this bites,
- * because a partial risk answer that presents itself as complete is worse than an
- * error. See PLAN.md §5.
- */
-export const DEFAULT_MAX_TRAVERSAL_DEPTH = 6;

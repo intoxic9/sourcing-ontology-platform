@@ -1,7 +1,8 @@
 import {
   AgentExecutionBlockedError,
+  patternConformanceCases,
   supplyChainFixture,
-  supplyChainQueries,
+  SUPPLIER_DEVICE_RISK,
   UnknownObjectError,
   type InMemoryObject,
   type Tracked,
@@ -99,8 +100,7 @@ describe.skipIf(databaseUrl === undefined)('postgres ontology store', () => {
       await expect(
         ctx.traverse({
           from: { objectType: 'SUPPLIER', id: 'ghost' },
-          to: 'DEVICE',
-          via: ['SUPPLIES'],
+          profile: SUPPLIER_DEVICE_RISK,
         }),
       ).rejects.toThrow(UnknownObjectError);
     });
@@ -113,17 +113,16 @@ describe.skipIf(databaseUrl === undefined)('postgres ontology store', () => {
       await expect(
         ctx.traverse({
           from: { objectType: 'SUPPLIER', id: 'sup-1' },
-          to: 'DEVICE',
-          via: [],
+          profile: { pattern: [], to: 'DEVICE' },
         }),
       ).rejects.toThrow(RangeError);
     });
   });
 
-  it('agrees with the in-memory context on every shared query, including truncated and pathCount', async () => {
+  it('agrees with the in-memory context on every pattern conformance case', async () => {
     await withTransaction(pool, async (client: Queryable) => {
       const compared = await compareFixtureTraversals(client);
-      expect(compared).toBe(supplyChainQueries.length);
+      expect(compared).toBe(patternConformanceCases.length);
     });
   });
 

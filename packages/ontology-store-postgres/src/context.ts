@@ -1,10 +1,10 @@
 import {
+  assertValidTraversalProfile,
   collapseToTargets,
   linkSchema,
   makePath,
   objectSchemas,
   objectTypeDefinition,
-  resolveMaxDepth,
   UnknownObjectError,
   type Link,
   type LinkQuery,
@@ -21,81 +21,7 @@ import {
 } from '@sourcing/ontology';
 
 import type { Queryable } from './repository.js';
-
-/**
- * Enumerates paths and reports truncation. Everything downstream of that — max-of-min
- * per target, `pathCount`, best-path selection, the weakest link — is done by the pure
- * algebra in `@sourcing/ontology`, shared with the in-memory context.
- *
- * That split is deliberate and is what keeps the two implementations honest: the only
- * things SQL decides are which paths exist and whether the search was cut short, so
- * those are the only things that can disagree. The conformance check compares the full
- * result of both.
- *
- * `eligible` unions the links in both directions, because reaching a Device from a Part
- * means crossing COMPOSED_OF against its declared direction (ONTOLOGY.md §4). The
- * `visited` array is the cycle detection, and seeding it with the source is also what
- * keeps the source out of its own results.
- *
- * Path confidence is *not* accumulated as `LEAST(...)` here. Each step already carries
- * its hop confidence, and `makePath` is the single owner of the minimum. A running
- * `LEAST` in SQL would be a second implementation of the same function, which is how
- * the CTE and the algebra would silently drift.
- */
-const TRAVERSE = `
-WITH RECURSIVE eligible AS (
-        SELECT from_id AS node_id, to_id AS other_id,
-               id, link_type, confidence, 'ALONG' AS direction
-          FROM links
-         WHERE link_type = ANY($2::text[])
-         UNION ALL
-        SELECT to_id AS node_id, from_id AS other_id,
-               id, link_type, confidence, 'AGAINST' AS direction
-          FROM links
-         WHERE link_type = ANY($2::text[])
-),
-walk AS (
-        SELECT $1::text            AS node_id,
-               ARRAY[$1::text]     AS visited,
-               0                   AS depth,
-               '[]'::jsonb         AS steps
-         UNION ALL
-        SELECT e.other_id,
-               w.visited || e.other_id,
-               w.depth + 1,
-               w.steps || jsonb_build_array(jsonb_build_object(
-                   'linkId',     e.id::text,
-                   'linkType',   e.link_type,
-                   'direction',  e.direction,
-                   'confidence', e.confidence::float8,
-                   'to', jsonb_build_object('id', target.id, 'objectType', target.object_type)
-               ))
-          FROM walk w
-          JOIN eligible e   ON e.node_id = w.node_id
-          JOIN objects target ON target.id = e.other_id
-         WHERE w.depth < $3::int
-           AND NOT (e.other_id = ANY(w.visited))
-)
-SELECT
-    COALESCE((
-        SELECT jsonb_agg(w.steps ORDER BY w.depth, w.node_id)
-          FROM walk w
-          JOIN objects o ON o.id = w.node_id
-         WHERE w.depth > 0
-           AND o.object_type = $4::text
-    ), '[]'::jsonb) AS paths,
-
-    -- Truncation, translated one-for-one from the in-memory walk: a row that sat at the
-    -- cap while an eligible edge to a node not already on its path went uncrossed. The
-    -- same join and the same cycle predicate as the recursive term above.
-    EXISTS (
-        SELECT 1
-          FROM walk w
-          JOIN eligible e ON e.node_id = w.node_id
-         WHERE w.depth = $3::int
-           AND NOT (e.other_id = ANY(w.visited))
-    ) AS truncated
-`;
+import { buildPatternTraverseSql } from './pattern-sql.js';
 
 const SELECT_PROPERTIES = `
     SELECT property_name, ordinal, value, confidence,
@@ -142,7 +68,6 @@ type LinkRow = EvidenceRow & {
 
 type TraversalRow = {
   paths: unknown;
-  truncated: boolean;
 };
 
 function asPathSteps(raw: unknown): readonly PathStep[] {
@@ -173,11 +98,6 @@ function asPathSteps(raw: unknown): readonly PathStep[] {
   });
 }
 
-/**
- * `numeric` arrives as a string, because node-postgres will not silently lose precision
- * on a type that can hold more than a double. `confidence_score` is `numeric(4,3)`, so
- * the conversion is exact.
- */
 function toConfidence(raw: string): number {
   const value = Number(raw);
   if (Number.isNaN(value)) throw new Error(`confidence ${raw} is not a number`);
@@ -186,8 +106,6 @@ function toConfidence(raw: string): number {
 
 function required(value: string | null, column: string): string {
   if (value === null) {
-    // Migration 004's biconditional CHECKs make this unreachable; reaching it means the
-    // constraints were dropped or bypassed, which is worth saying out loud.
     throw new Error(`${column} is null on a row whose method requires it`);
   }
   return value;
@@ -229,9 +147,6 @@ function toTracked(row: PropertyRow): Tracked<unknown> {
     value: row.value,
     confidence: toConfidence(row.confidence),
     provenance: toProvenance(row),
-    // Spread rather than assigned, so an unverified property has no key at all.
-    // exactOptionalPropertyTypes makes absent and explicitly-undefined different, and
-    // the fixture round trip would notice.
     ...(verification === undefined ? {} : { verification }),
   };
 }
@@ -257,7 +172,6 @@ export function createPostgresContext(db: Queryable): OntologyContext {
     const assembled: Record<string, unknown> = { id };
 
     for (const definition of objectTypeDefinition(objectType).properties) {
-      // Already ordered by ordinal, which is what turns rows back into an array.
       const matching = rows.filter((row) => row.property_name === definition.name);
 
       if (definition.cardinality === 'MULTIPLE') {
@@ -269,8 +183,6 @@ export function createPostgresContext(db: Queryable): OntologyContext {
       if (single !== undefined) assembled[definition.name] = toTracked(single);
     }
 
-    // Validated on the way out for the same reason as on the way in: with EAV storage,
-    // nothing else establishes that these rows form a well-typed object.
     return objectSchemas[objectType].parse(assembled) as ObjectOf<T>;
   }
 
@@ -299,23 +211,15 @@ export function createPostgresContext(db: Queryable): OntologyContext {
   }
 
   async function traverse(query: TraversalQuery): Promise<TraversalResult> {
-    const maxDepth = resolveMaxDepth(query.maxDepth);
-
-    if (query.via.length === 0) {
-      throw new RangeError('traverse requires at least one link type in `via`');
-    }
-
     const stored = await objectTypeOf(query.from.id);
     if (stored === undefined || stored !== query.from.objectType) {
       throw new UnknownObjectError(query.from.objectType, query.from.id);
     }
 
-    const { rows } = await db.query<TraversalRow>(TRAVERSE, [
-      query.from.id,
-      [...query.via],
-      maxDepth,
-      query.to,
-    ]);
+    assertValidTraversalProfile(query.from.objectType, query.profile);
+
+    const sql = buildPatternTraverseSql(query.profile);
+    const { rows } = await db.query<TraversalRow>(sql, [query.from.id]);
 
     const row = rows[0];
     if (row === undefined) throw new Error('traversal returned no row');
@@ -324,7 +228,7 @@ export function createPostgresContext(db: Queryable): OntologyContext {
     const rawPaths = Array.isArray(row.paths) ? row.paths : [];
     const paths = rawPaths.map((steps) => makePath(source, asPathSteps(steps)));
 
-    return { targets: collapseToTargets(paths), truncated: row.truncated, maxDepth };
+    return { targets: collapseToTargets(paths), profile: query.profile };
   }
 
   return { getObject, getLinks, traverse };

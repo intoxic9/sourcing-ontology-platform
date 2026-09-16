@@ -1,6 +1,6 @@
-import { DEFAULT_MAX_TRAVERSAL_DEPTH } from './constants.js';
 import type { LinkTypeName } from './link-types.js';
 import type { ObjectTypeName } from './object-types.js';
+import type { TraversalProfile } from './profiles.js';
 
 /**
  * The confidence of a path with no steps, and the identity element for `min`.
@@ -27,8 +27,7 @@ export type PathNode = {
 /**
  * Relative to the link type's declared direction. `ONTOLOGY.md` §4's critical path is
  * `Supplier --SUPPLIES--> Part <--COMPOSED_OF-- Device`, so reaching a device from a
- * part means walking `COMPOSED_OF` AGAINST its declared direction. Every hop considers
- * both directions, which is what `links_from_idx` and `links_to_idx` are both for.
+ * part means walking `COMPOSED_OF` AGAINST its declared direction.
  */
 export type StepDirection = 'ALONG' | 'AGAINST';
 
@@ -68,45 +67,16 @@ export type AffectedTarget = {
   pathCount: number;
 };
 
+export type TraversalQuery = {
+  from: { objectType: ObjectTypeName; id: string };
+  profile: TraversalProfile;
+};
+
 export type TraversalResult = {
   /** Sorted by confidence descending. Never includes the source object itself. */
   targets: readonly AffectedTarget[];
-
-  /**
-   * The search hit `maxDepth` with eligible edges still unexplored. This describes the
-   * search, not any path: every returned path is real and complete.
-   *
-   * Two consequences, both of which matter for a risk answer:
-   *
-   * 1. A target's *absence* means different things. Absent with `truncated: false` is
-   *    "not reachable in the data we hold". Absent with `truncated: true` is "unknown —
-   *    there may be a path beyond the cap". These are not interchangeable.
-   *
-   * 2. **The reported confidences are lower bounds.** A two-hop route with one 0.4 link
-   *    is worse than an eight-hop route where every link is 0.95, so a target found
-   *    inside the cap may have a better path outside it. Truncation does not only mean
-   *    "there may be more targets", it means "these numbers may be pessimistic".
-   */
-  truncated: boolean;
-
-  /** The cap actually applied, so a caller can tell a default from an explicit value. */
-  maxDepth: number;
-};
-
-export type TraversalQuery = {
-  from: { objectType: ObjectTypeName; id: string };
-  to: ObjectTypeName;
-
-  /**
-   * Which link types the walk may cross. Not optional: without it a supplier reaches
-   * devices through a quality event via `AFFECTS_SUPPLIER` and `AFFECTS_PART`, which is
-   * a real connection but a different claim from "supplies a part in that device".
-   * Silently mixing the two would leave the confidence number meaning nothing.
-   */
-  via: readonly LinkTypeName[];
-
-  /** Defaults to `DEFAULT_MAX_TRAVERSAL_DEPTH`. */
-  maxDepth?: number;
+  /** Copy of the profile that was executed, so responses are self-describing. */
+  profile: TraversalProfile;
 };
 
 /** The minimum along the path. Never the product — see ONTOLOGY.md §4. */
@@ -221,11 +191,9 @@ function compareTargets(a: AffectedTarget, b: AffectedTarget): number {
  * noisy-OR would inflate it past any single chain. The maximum never claims more than
  * the strongest end-to-end route actually found.
  *
- * Collapsing here is also what bounds the result. `maxDepth` limits how far the search
- * walks but does nothing about path *count*, which is where a dense BOM graph explodes;
- * one path per target bounds the output at the number of reachable nodes.
+ * One path per target bounds the output at the number of reachable nodes.
  *
- * Independent of the order paths arrive in, so the in-memory walk and the recursive CTE
+ * Independent of the order paths arrive in, so the in-memory walk and the pattern SQL
  * produce identical results from identical data.
  */
 export function collapseToTargets(paths: readonly Path[]): AffectedTarget[] {
@@ -257,13 +225,12 @@ export function collapseToTargets(paths: readonly Path[]): AffectedTarget[] {
  * The comparison shape for a `TraversalResult`.
  *
  * `linkId` is stripped because it is assigned by storage, not by the walk. Everything
- * else that a risk answer depends on is here: targets, confidences, `pathCount`,
- * `truncated`, `maxDepth`, the steps of the best path, and `weakestStepIndex`.
+ * else that a risk answer depends on is here: profile, targets, confidences, `pathCount`,
+ * the steps of the best path, and `weakestStepIndex`.
  */
 export function canonicalTraversalResult(result: TraversalResult): unknown {
   return {
-    truncated: result.truncated,
-    maxDepth: result.maxDepth,
+    profile: result.profile,
     targets: result.targets.map((entry) => ({
       target: entry.target,
       confidence: entry.confidence,
@@ -281,12 +248,4 @@ export function canonicalTraversalResult(result: TraversalResult): unknown {
       },
     })),
   };
-}
-
-export function resolveMaxDepth(maxDepth: number | undefined): number {
-  const depth = maxDepth ?? DEFAULT_MAX_TRAVERSAL_DEPTH;
-  if (!Number.isInteger(depth) || depth < 0) {
-    throw new RangeError(`maxDepth must be a non-negative integer, received ${String(depth)}`);
-  }
-  return depth;
 }

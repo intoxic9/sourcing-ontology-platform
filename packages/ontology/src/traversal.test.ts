@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_MAX_TRAVERSAL_DEPTH } from './constants.js';
 import type { LinkTypeName } from './link-types.js';
 import type { ObjectTypeName } from './object-types.js';
 import {
@@ -10,7 +9,6 @@ import {
   makePath,
   pathConfidence,
   pathTarget,
-  resolveMaxDepth,
   weakestLink,
   weakestStepIndex,
   type PathNode,
@@ -28,9 +26,6 @@ const step = (
 const source = node('sup-1', 'SUPPLIER');
 
 describe('pathConfidence', () => {
-  // The degenerate case, and it is forced rather than chosen: path confidence has to
-  // compose, so conf(p1 ++ p2) = min(conf(p1), conf(p2)). Any value below 1 would mean
-  // prepending an empty path weakened the path it was prepended to.
   it('is CERTAIN for a path with no steps', () => {
     expect(pathConfidence([])).toBe(CERTAIN);
     expect(CERTAIN).toBe(1);
@@ -40,7 +35,6 @@ describe('pathConfidence', () => {
     const steps = [step(node('a'), 0.9), step(node('b'), 0.8), step(node('c'), 0.95)];
     expect(pathConfidence(steps)).toBe(0.8);
 
-    // 0.9 * 0.8 * 0.95 = 0.684, which is what we are deliberately not doing.
     expect(pathConfidence(steps)).not.toBeCloseTo(0.684);
   });
 
@@ -65,8 +59,6 @@ describe('weakestStepIndex', () => {
     expect(weakestStepIndex(steps)).toBe(0);
   });
 
-  // The loop must not start from CERTAIN, or an all-certain path would report no
-  // weakest step despite having steps.
   it('picks a step even when every step is certain', () => {
     expect(weakestStepIndex([step(node('a'), 1), step(node('b'), 1)])).toBe(0);
   });
@@ -88,7 +80,6 @@ describe('makePath', () => {
     expect(path.confidence).toBe(CERTAIN);
     expect(path.weakestStepIndex).toBeNull();
     expect(weakestLink(path)).toBeNull();
-    // A zero-step path ends where it started.
     expect(pathTarget(path)).toStrictEqual(source);
   });
 });
@@ -120,8 +111,6 @@ describe('betterPath', () => {
 describe('collapseToTargets', () => {
   const device = node('dev-1', 'DEVICE');
 
-  // Two routes to one device: our confidence is the best chain, not the worst and not a
-  // combination of the two.
   const viaStrongPart = makePath(source, [step(node('part-1'), 0.9), step(device, 0.8)]);
   const viaWeakPart = makePath(source, [step(node('part-2'), 0.5), step(device, 0.95)]);
 
@@ -156,27 +145,11 @@ describe('collapseToTargets', () => {
   });
 
   it('picks the same bestPath regardless of input order', () => {
-    // Equal confidence, equal length: the signature, not arrival order, decides.
     const left = makePath(source, [step(node('dev-a', 'DEVICE'), 0.7)]);
     const right = makePath(source, [step(node('dev-b', 'DEVICE'), 0.7)]);
 
     expect(collapseToTargets([left, right]).map((entry) => entry.target.id)).toStrictEqual(
       collapseToTargets([right, left]).map((entry) => entry.target.id),
     );
-  });
-});
-
-describe('resolveMaxDepth', () => {
-  it('defaults to the documented cap', () => {
-    expect(resolveMaxDepth(undefined)).toBe(DEFAULT_MAX_TRAVERSAL_DEPTH);
-    expect(DEFAULT_MAX_TRAVERSAL_DEPTH).toBe(6);
-  });
-
-  it('accepts an explicit zero', () => {
-    expect(resolveMaxDepth(0)).toBe(0);
-  });
-
-  it.each([-1, 1.5, Number.NaN])('rejects %s', (depth) => {
-    expect(() => resolveMaxDepth(depth)).toThrow(RangeError);
   });
 });

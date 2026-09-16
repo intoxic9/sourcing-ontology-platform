@@ -53,9 +53,8 @@ export type OntologyContext = {
   ): Promise<ObjectOf<T> | undefined>;
 
   /**
-   * One hop, both directions. Expressible as `traverse` with `maxDepth: 1`, and kept
-   * separate anyway: Action preconditions are the readability-critical code here, and
-   * "the quality events linked to this supplier" should not read as a graph traversal.
+   * One hop, both directions. Kept separate from pattern traversal so Action
+   * preconditions read as link lookups rather than graph walks.
    */
   getLinks(query: LinkQuery): Promise<readonly Link[]>;
 

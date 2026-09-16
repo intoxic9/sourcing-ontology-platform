@@ -1,22 +1,18 @@
 import type { InMemoryGraph, InMemoryObject } from './in-memory-context.js';
 import type { Link, LinkTypeName } from './link-types.js';
 import type { Tracked } from './tracked.js';
+import { SUPPLIER_DEVICE_RISK } from './profiles.js';
 import type { TraversalQuery } from './traversal.js';
 
 /**
  * A small supply-chain graph shared by the in-memory unit tests and the Postgres
  * conformance check.
  *
- * It has one owner on purpose. The conformance check's entire value is that both
+ * It has one owner. The conformance check's entire value is that both
  * implementations see identical input, and a fixture copied into two places would drift
  * into two different graphs that both "pass".
  */
 
-/**
- * Milliseconds are explicit so the storage round trip is byte-exact. `timestamptz`
- * records an instant and has no memory of how the string was written, so a fixture
- * using `...:00Z` would come back as `...:00.000Z` and look like a mismatch.
- */
 const AT = '2026-01-15T09:30:00.000Z';
 
 const provenance = {
@@ -27,7 +23,6 @@ const provenance = {
   extractedAt: AT,
 } as const;
 
-/** `const` type parameter so enum literals stay literal instead of widening to string. */
 const t = <const T>(value: T, confidence = 1): Tracked<T> => ({ value, confidence, provenance });
 
 const supplier = (id: string): InMemoryObject => ({
@@ -75,8 +70,6 @@ const qualityEvent = (id: string): InMemoryObject => ({
     severity: t('CRITICAL'),
     openedAt: t(AT),
     description: t('finding'),
-    // closedAt is deliberately omitted: an open event, and an optional property with no
-    // row at all, so the storage round trip has to reproduce absence rather than null.
   },
 });
 
@@ -103,10 +96,6 @@ const link = (
  * ev-1 --AFFECTS_SUPPLIER(1.0)--> sup-1
  * ev-1 --AFFECTS_PART(1.0)-----> part-3
  * ```
- *
- * Two routes to dev-1 with different weakest links, so max-of-min is observable.
- * dev-2 hangs off a part nobody supplies and is reachable only by detouring through the
- * quality event — the wrong answer `via` exists to prevent.
  */
 export const supplyChainFixture: InMemoryGraph = {
   objects: [
@@ -131,27 +120,103 @@ export const supplyChainFixture: InMemoryGraph = {
   ],
 };
 
-export const SUPPLY_CHAIN: readonly LinkTypeName[] = ['SUPPLIES', 'COMPOSED_OF'];
-
-const from = { objectType: 'SUPPLIER', id: 'sup-1' } as const;
-
 /**
- * The queries the conformance check runs through both implementations. Chosen to cover
- * the places the two are most likely to disagree rather than the places they obviously
- * agree: every depth around the cap, an exhausted search, a wandering `via`, and a
- * target type that would include the source if the source were not excluded.
+ * Reproduces the old four-hop bridge (Helix → part-shared → other supplier → part-bridge
+ * → device) while keeping part-shared off the bridge device's BOM. The two-hop pattern
+ * must not reach `dev-bridge-only`; an unbounded `via` walk would.
  */
-export const supplyChainQueries: readonly TraversalQuery[] = [
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN },
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN, maxDepth: 0 },
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN, maxDepth: 1 },
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN, maxDepth: 2 },
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN, maxDepth: 3 },
-  { from, to: 'DEVICE', via: SUPPLY_CHAIN, maxDepth: 6 },
-  { from, to: 'PART', via: SUPPLY_CHAIN },
-  { from, to: 'SUPPLIER', via: SUPPLY_CHAIN },
-  { from, to: 'DEVICE', via: ['SUPPLIES', 'COMPOSED_OF', 'AFFECTS_SUPPLIER', 'AFFECTS_PART'] },
-  { from, to: 'QUALITY_EVENT', via: ['AFFECTS_SUPPLIER'] },
-  { from: { objectType: 'DEVICE', id: 'dev-1' }, to: 'SUPPLIER', via: SUPPLY_CHAIN },
-  { from: { objectType: 'QUALITY_EVENT', id: 'ev-1' }, to: 'DEVICE', via: ['AFFECTS_PART', 'COMPOSED_OF'] },
+export const sharedPartBridgeFixture: InMemoryGraph = {
+  objects: [
+    supplier('sup-helix'),
+    supplier('sup-other'),
+    part('part-shared'),
+    part('part-bridge'),
+    device('dev-infusor'),
+    device('dev-bridge-only'),
+  ],
+  links: [
+    link('SUPPLIES', 'sup-helix', 'part-shared', 0.55),
+    link('SUPPLIES', 'sup-other', 'part-shared', 0.97),
+    link('SUPPLIES', 'sup-other', 'part-bridge', 0.96),
+    link('COMPOSED_OF', 'dev-infusor', 'part-shared', 0.92),
+    link('COMPOSED_OF', 'dev-bridge-only', 'part-bridge', 0.93),
+  ],
+};
+
+const fromSup1 = { objectType: 'SUPPLIER', id: 'sup-1' } as const;
+
+export type PatternConformanceCase = {
+  name: string;
+  fixture: InMemoryGraph;
+  query: TraversalQuery;
+  expected: {
+    targetIds: readonly string[];
+    /** Per target id, in the same order as targetIds when sorted by id is not used — map by id */
+    byTarget: Readonly<
+      Record<
+        string,
+        {
+          confidence: number;
+          pathCount: number;
+          stepDirections: readonly (readonly [LinkTypeName, 'ALONG' | 'AGAINST'])[];
+        }
+      >
+    >;
+  };
+};
+
+export const patternConformanceCases: readonly PatternConformanceCase[] = [
+  {
+    name: 'sup-1 supplier device risk — two routes to dev-1',
+    fixture: supplyChainFixture,
+    query: { from: fromSup1, profile: SUPPLIER_DEVICE_RISK },
+    expected: {
+      targetIds: ['dev-1'],
+      byTarget: {
+        'dev-1': {
+          confidence: 0.8,
+          pathCount: 2,
+          stepDirections: [
+            ['SUPPLIES', 'ALONG'],
+            ['COMPOSED_OF', 'AGAINST'],
+          ],
+        },
+      },
+    },
+  },
+  {
+    name: 'shared part bridge — helix reaches infusor only, not bridge-only device',
+    fixture: sharedPartBridgeFixture,
+    query: { from: { objectType: 'SUPPLIER', id: 'sup-helix' }, profile: SUPPLIER_DEVICE_RISK },
+    expected: {
+      targetIds: ['dev-infusor'],
+      byTarget: {
+        'dev-infusor': {
+          confidence: 0.55,
+          pathCount: 1,
+          stepDirections: [['SUPPLIES', 'ALONG'], ['COMPOSED_OF', 'AGAINST']],
+        },
+      },
+    },
+  },
+  {
+    name: 'shared part bridge — other supplier reaches both devices',
+    fixture: sharedPartBridgeFixture,
+    query: { from: { objectType: 'SUPPLIER', id: 'sup-other' }, profile: SUPPLIER_DEVICE_RISK },
+    expected: {
+      targetIds: ['dev-bridge-only', 'dev-infusor'],
+      byTarget: {
+        'dev-infusor': {
+          confidence: 0.92,
+          pathCount: 1,
+          stepDirections: [['SUPPLIES', 'ALONG'], ['COMPOSED_OF', 'AGAINST']],
+        },
+        'dev-bridge-only': {
+          confidence: 0.93,
+          pathCount: 1,
+          stepDirections: [['SUPPLIES', 'ALONG'], ['COMPOSED_OF', 'AGAINST']],
+        },
+      },
+    },
+  },
 ];

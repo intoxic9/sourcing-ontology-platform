@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './index.js';
+import { ONTOLOGY_SCHEMA_VERSION, SUPPLIER_DEVICE_RISK, terminalObjectType } from './index.js';
 
 describe('@sourcing/ontology', () => {
   it('exposes the schema version that the store and API pin against', () => {
     expect(ONTOLOGY_SCHEMA_VERSION).toBe('0.1.0');
   });
 
-  it('caps traversal depth at 6 by default', () => {
-    expect(DEFAULT_MAX_TRAVERSAL_DEPTH).toBe(6);
+  it('pairs supplier device risk pattern with DEVICE terminal type', () => {
+    expect(terminalObjectType('SUPPLIER', SUPPLIER_DEVICE_RISK.pattern)).toBe('DEVICE');
+    expect(SUPPLIER_DEVICE_RISK.to).toBe('DEVICE');
   });
 });

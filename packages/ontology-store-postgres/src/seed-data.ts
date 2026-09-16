@@ -386,3 +386,4 @@ export const seedGraph: InMemoryGraph = {
 
 export const DEMO_SUPPLIER_RISK = 'SUP-HELIX';
 export const DEMO_SUPPLIER_ACTION = 'SUP-MEDSOURCE';
+export const DEMO_HELIX_DEVICE = 'DEV-IP200';
