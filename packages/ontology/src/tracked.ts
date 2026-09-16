@@ -37,29 +37,36 @@ const provenanceCommon = {
  * silently discarded rather than rejected. Silently dropping provenance is precisely
  * the failure mode provenance exists to prevent. It also keeps runtime behaviour in
  * step with the emitted JSON Schema, which carries `additionalProperties: false`.
+ *
+ * The `id` is what gives this a named `$defs` entry in the emitted contract instead of
+ * being inlined once per property. Provenance sits on every property of every type, and
+ * its three branches carry the full ISO-8601 pattern, so inlining it is most of the
+ * document: naming it takes the contract from ~3,800 lines to under 1,000.
  */
-export const provenanceSchema = z.discriminatedUnion('method', [
-  // A person typing a value has no ingestion run to attribute it to.
-  z.strictObject({
-    ...provenanceCommon,
-    method: z.literal('HUMAN_ENTRY'),
-    sourceRecordId: z.string().min(1),
-  }),
+export const provenanceSchema = z
+  .discriminatedUnion('method', [
+    // A person typing a value has no ingestion run to attribute it to.
+    z.strictObject({
+      ...provenanceCommon,
+      method: z.literal('HUMAN_ENTRY'),
+      sourceRecordId: z.string().min(1),
+    }),
 
-  // A value derived from other tracked values has no raw source row to point at.
-  z.strictObject({
-    ...provenanceCommon,
-    method: z.literal('INFERRED'),
-    pipelineRunId: z.string().min(1),
-  }),
+    // A value derived from other tracked values has no raw source row to point at.
+    z.strictObject({
+      ...provenanceCommon,
+      method: z.literal('INFERRED'),
+      pipelineRunId: z.string().min(1),
+    }),
 
-  z.strictObject({
-    ...provenanceCommon,
-    method: z.enum(['DIRECT', 'FUZZY_MATCH', 'LLM_EXTRACTION']),
-    sourceRecordId: z.string().min(1),
-    pipelineRunId: z.string().min(1),
-  }),
-]);
+    z.strictObject({
+      ...provenanceCommon,
+      method: z.enum(['DIRECT', 'FUZZY_MATCH', 'LLM_EXTRACTION']),
+      sourceRecordId: z.string().min(1),
+      pipelineRunId: z.string().min(1),
+    }),
+  ])
+  .meta({ id: 'Provenance' });
 export type Provenance = z.infer<typeof provenanceSchema>;
 
 /**
@@ -67,10 +74,12 @@ export type Provenance = z.infer<typeof provenanceSchema>;
  * cannot be half-set. The type-level mirror of
  * `CHECK ((verified_by IS NULL) = (verified_at IS NULL))`.
  */
-export const verificationSchema = z.strictObject({
-  by: z.string().min(1),
-  at: timestampSchema,
-});
+export const verificationSchema = z
+  .strictObject({
+    by: z.string().min(1),
+    at: timestampSchema,
+  })
+  .meta({ id: 'Verification' });
 export type Verification = z.infer<typeof verificationSchema>;
 
 export const confidenceSchema = z.number().min(0).max(1);

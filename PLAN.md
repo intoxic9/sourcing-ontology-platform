@@ -399,6 +399,15 @@ These are not conventions. They are the properties the system's claims rest on.
    **And it fails if any `audit_records` row addresses no object**, which the database
    cannot enforce without a trigger.
 
+   **And it fails if the stored `schema_versions` row does not equal what
+   `@sourcing/ontology` produces** — `object_types` against `objectTypeDefinitions`,
+   `link_types` against `linkTypeDefinitions`, compared structurally because `jsonb`
+   normalises key order. `005` writes that payload as a hand-reviewed literal, so this
+   is the only thing standing between a schema change and a stored row that quietly
+   describes the previous version of the ontology. It is the sole owner of that
+   assertion: parsing the literal back out of the migration file would be a second,
+   more brittle check of the same fact, and the stored row is what actually matters.
+
 3. **The store package is the only holder of database credentials, enforced in CI.** A
    check fails the build if anything outside `@sourcing/ontology-store-postgres` imports
    `pg` or reads `DATABASE_URL` — including `apps/api` and every script. Invariant 1 is
@@ -597,6 +606,45 @@ sits at `properties.value` inside the `Tracked` wrapper. Derivation throws rathe
 guessing when a property is not wrapped in `tracked()`, carries a value type the
 ontology cannot store, declares an unknown `mutability`, or is an optional array.
 
+### The contract is built in the core and written by a script
+
+`buildContract()` and `serializeContract()` live in `@sourcing/ontology`, where they are
+ordinary testable computation; `scripts/emit-contract.mjs` only does `writeFile`. The
+package cannot do filesystem work itself — its tsconfig sets `"types": []` precisely to
+keep Node globals out — and that constraint pushed the logic to the right place anyway.
+Serialization lives in the package too, so the emit and the drift check cannot disagree
+about bytes.
+
+The script reads `dist/` rather than `src/`, because the contract should describe what a
+consumer of the built package actually gets.
+
+### `Provenance` and `Verification` are named `$defs`
+
+Zod inlines reused subschemas by default. Provenance sits on all ~35 properties and its
+three branches each carry the full ISO-8601 pattern, so inlining it *is* the document:
+3,774 lines. Giving those two schemas an `id` via `.meta()` gives them named `$defs`
+entries and takes the artifact to 992 lines.
+
+`reused: 'ref'` would also have deduplicated, but it names entries `__schema0`,
+`__schema12` and so on, which become Python class names. Naming the two schemas that
+matter is the difference between a contract someone can read and a generated blob.
+
+### Contract shape: JSON Schema with `x-` extensions
+
+`$defs` keys are PascalCase (`QualityEvent`) so generated Python classes are named
+sensibly, and each carries `"x-objectType": "QUALITY_EVENT"` so the mapping to the
+canonical name is recorded rather than inferred from casing — `x-linkTypes` names its
+endpoints canonically. `x-ontologyVersion` ties the document to the `schema_versions`
+row. The `x-` prefix marks them as extensions that JSON Schema tooling ignores.
+
+No `$id`: every `$ref` is an internal fragment, so nothing needs a base URI, and
+inventing a URL that does not resolve would be decoration.
+
+Nothing about `cardinality` or `mutability` is duplicated into the contract. Both are
+already visible in the JSON Schema — `type: "array"` and the `mutability` keyword from
+`.meta()` — which is the same property that lets `ObjectTypeDefinition` be derived
+rather than declared.
+
 ### Kept despite the pressure to cut
 
 `Tracked<T>` on every property, because retrofitting provenance is the one thing that
@@ -711,6 +759,8 @@ pollute lineage queries.
       `conformance`, `check:db-boundary`
 - [x] `check:db-boundary` — fails if anything outside the store package imports `pg` or
       reads `DATABASE_URL` (invariant 6.3)
+- [x] `check:contract` — fails if `contracts/ontology.schema.json` is stale against the
+      Zod schemas. Runs as part of `pnpm lint` alongside `check:db-boundary`
 
 **`@sourcing/ontology`**
 
@@ -729,7 +779,8 @@ pollute lineage queries.
 - [ ] `flagPartForRequalification` — requires a linked QualityEvent or supplier status
       change; approval for `CRITICAL`, auto-apply for `MINOR`
 - [ ] In-memory `OntologyContext` for tests
-- [ ] JSON Schema emit to `contracts/ontology.schema.json`
+- [x] JSON Schema emit to `contracts/ontology.schema.json`, with a `--check` mode that
+      fails on drift
 
 **`@sourcing/ontology-store-postgres`**
 
@@ -750,8 +801,9 @@ pollute lineage queries.
       biconditional on both `object_properties` and `links`, and the partial unique index
       on `(from_id) WHERE link_type = 'AFFECTS_SUPPLIER'` that makes the many-to-one
       cardinality in `ONTOLOGY.md` §4 real rather than decorative
-- [ ] `005`: the single `schema_versions` row, which can only be written once the object
-      and link type definitions exist in `@sourcing/ontology`
+- [x] `005_schema_version.sql`: the single `schema_versions` row, payload as a reviewed
+      literal. Opens the `objects.schema_version` FK gate that has blocked every insert
+      until now
 - [ ] Repository layer — sole writer, Zod validation on every write
 - [ ] Object assembly: EAV rows → `Tracked<T>` objects, arrays via `ordinal`
 - [ ] Recursive-CTE traversal with `LEAST(...)` accumulation and cycle detection

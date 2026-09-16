@@ -66,18 +66,6 @@ export {
   type ValueType,
 } from './definition.js';
 
-/**
- * The ontology schema version. Written as the single `schema_versions` row and pinned by
- * every consumer, so a store built against an older schema fails loudly instead of
- * writing malformed rows.
- */
-export const ONTOLOGY_SCHEMA_VERSION = '0.1.0';
+export { buildContract, serializeContract, type OntologyContract } from './contract.js';
 
-/**
- * Default depth cap for graph traversal, and the reason it exists: cycle detection via
- * the path array stops a loop revisiting a node, but a dense BOM graph is acyclic and
- * can still fan out combinatorially. Callers get a `truncated` flag when this bites,
- * because a partial risk answer that presents itself as complete is worse than an
- * error. See PLAN.md §5.
- */
-export const DEFAULT_MAX_TRAVERSAL_DEPTH = 6;
+export { DEFAULT_MAX_TRAVERSAL_DEPTH, ONTOLOGY_SCHEMA_VERSION } from './constants.js';

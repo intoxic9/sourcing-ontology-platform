@@ -1,0 +1,992 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sourcing ontology",
+  "description": "Generated from the Zod schemas in @sourcing/ontology by scripts/emit-contract.mjs. Do not edit by hand. The x- prefixed keys are extensions that JSON Schema tooling ignores.",
+  "x-ontologyVersion": "0.1.0",
+  "x-linkTypes": [
+    {
+      "name": "SUPPLIES",
+      "from": "SUPPLIER",
+      "to": "PART",
+      "cardinality": "MANY_TO_MANY"
+    },
+    {
+      "name": "COMPOSED_OF",
+      "from": "DEVICE",
+      "to": "PART",
+      "cardinality": "MANY_TO_MANY"
+    },
+    {
+      "name": "MANUFACTURED_AT",
+      "from": "DEVICE",
+      "to": "SITE",
+      "cardinality": "MANY_TO_MANY"
+    },
+    {
+      "name": "AFFECTS_SUPPLIER",
+      "from": "QUALITY_EVENT",
+      "to": "SUPPLIER",
+      "cardinality": "MANY_TO_ONE"
+    },
+    {
+      "name": "AFFECTS_PART",
+      "from": "QUALITY_EVENT",
+      "to": "PART",
+      "cardinality": "MANY_TO_MANY"
+    }
+  ],
+  "$defs": {
+    "Provenance": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "sourceSystem": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extractedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "method": {
+              "type": "string",
+              "const": "HUMAN_ENTRY"
+            },
+            "sourceRecordId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "sourceSystem",
+            "extractedAt",
+            "method",
+            "sourceRecordId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sourceSystem": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extractedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "method": {
+              "type": "string",
+              "const": "INFERRED"
+            },
+            "pipelineRunId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "sourceSystem",
+            "extractedAt",
+            "method",
+            "pipelineRunId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sourceSystem": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extractedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "DIRECT",
+                "FUZZY_MATCH",
+                "LLM_EXTRACTION"
+              ]
+            },
+            "sourceRecordId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pipelineRunId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "sourceSystem",
+            "extractedAt",
+            "method",
+            "sourceRecordId",
+            "pipelineRunId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Verification": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "by",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "Supplier": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "legalName": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "duns": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "country": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "tier": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "TIER_1",
+                "TIER_2",
+                "TIER_3"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "status": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "APPROVED",
+                "PROVISIONAL",
+                "SUSPENDED",
+                "DISQUALIFIED"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false,
+          "mutability": "ACTION_ONLY"
+        },
+        "qualityRating": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "certifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "provenance": {
+                "$ref": "#/$defs/Provenance"
+              },
+              "verification": {
+                "$ref": "#/$defs/Verification"
+              }
+            },
+            "required": [
+              "value",
+              "confidence",
+              "provenance"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "id",
+        "legalName",
+        "country",
+        "tier",
+        "status",
+        "qualityRating",
+        "certifications"
+      ],
+      "additionalProperties": false,
+      "x-objectType": "SUPPLIER"
+    },
+    "Part": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "partNumber": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "description": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "classification": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "DIRECT_MATERIAL",
+                "COMPONENT",
+                "SUBASSEMBLY"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "criticality": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "CRITICAL",
+                "MAJOR",
+                "MINOR"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "requiresRequalification": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false,
+          "mutability": "ACTION_ONLY"
+        },
+        "unitCost": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number",
+              "minimum": 0
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "partNumber",
+        "description",
+        "classification",
+        "criticality",
+        "requiresRequalification",
+        "unitCost"
+      ],
+      "additionalProperties": false,
+      "x-objectType": "PART"
+    },
+    "Device": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deviceName": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "productFamily": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "regulatoryClass": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "CLASS_I",
+                "CLASS_II",
+                "CLASS_III"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "lifecycleStage": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "DEVELOPMENT",
+                "ACTIVE",
+                "END_OF_LIFE",
+                "DISCONTINUED"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "deviceName",
+        "productFamily",
+        "regulatoryClass",
+        "lifecycleStage"
+      ],
+      "additionalProperties": false,
+      "x-objectType": "DEVICE"
+    },
+    "Site": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "siteName": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "country": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "siteType": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "MANUFACTURING",
+                "ASSEMBLY",
+                "STERILIZATION",
+                "DISTRIBUTION"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "siteName",
+        "country",
+        "siteType"
+      ],
+      "additionalProperties": false,
+      "x-objectType": "SITE"
+    },
+    "QualityEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventType": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "AUDIT_FINDING",
+                "NONCONFORMANCE",
+                "COMPLAINT",
+                "RECALL"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "severity": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "enum": [
+                "CRITICAL",
+                "MAJOR",
+                "MINOR"
+              ]
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "openedAt": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "closedAt": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "description": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provenance": {
+              "$ref": "#/$defs/Provenance"
+            },
+            "verification": {
+              "$ref": "#/$defs/Verification"
+            }
+          },
+          "required": [
+            "value",
+            "confidence",
+            "provenance"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "eventType",
+        "severity",
+        "openedAt",
+        "description"
+      ],
+      "additionalProperties": false,
+      "x-objectType": "QUALITY_EVENT"
+    },
+    "Link": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "linkType": {
+          "type": "string",
+          "enum": [
+            "SUPPLIES",
+            "COMPOSED_OF",
+            "MANUFACTURED_AT",
+            "AFFECTS_SUPPLIER",
+            "AFFECTS_PART"
+          ]
+        },
+        "fromId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        }
+      },
+      "required": [
+        "id",
+        "linkType",
+        "fromId",
+        "toId",
+        "confidence",
+        "provenance"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

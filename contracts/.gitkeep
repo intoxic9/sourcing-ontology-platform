@@ -1,3 +1,0 @@
-# ontology.schema.json is emitted here from the Zod schemas in @sourcing/ontology and
-# committed. It is the TS <-> Python contract: Python generates Pydantic models from
-# this artifact rather than hand-redeclaring Tracked<T> and Provenance. See PLAN.md §4.
