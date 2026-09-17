@@ -78,6 +78,8 @@ export {
   makePath,
   pathConfidence,
   pathTarget,
+  pathStepsEqual,
+  longestCommonStepPrefixLength,
   weakestLink,
   weakestStepIndex,
   type AffectedTarget,

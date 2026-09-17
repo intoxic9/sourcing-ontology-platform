@@ -125,6 +125,35 @@ export function weakestLink(path: Path): PathStep | null {
   return path.steps[path.weakestStepIndex] ?? null;
 }
 
+/** Whether two steps describe the same edge for display and prefix collapse. */
+export function pathStepsEqual(a: PathStep, b: PathStep): boolean {
+  return (
+    a.linkType === b.linkType &&
+    a.direction === b.direction &&
+    a.confidence === b.confidence &&
+    a.to.objectType === b.to.objectType &&
+    a.to.id === b.to.id
+  );
+}
+
+/**
+ * Longest step prefix shared by every path's `steps` array. Zero when paths disagree
+ * on the first hop or when there are no paths.
+ */
+export function longestCommonStepPrefixLength(paths: readonly { steps: readonly PathStep[] }[]): number {
+  if (paths.length === 0) return 0;
+  const reference = paths[0]!.steps;
+  let length = 0;
+  while (length < reference.length) {
+    const step = reference[length]!;
+    if (!paths.every((path) => path.steps[length] !== undefined && pathStepsEqual(step, path.steps[length]!))) {
+      break;
+    }
+    length += 1;
+  }
+  return length;
+}
+
 /** Where the path ends. Falls back to `from`, which is correct for a zero-step path. */
 export function pathTarget(path: Path): PathNode {
   return path.steps.at(-1)?.to ?? path.from;

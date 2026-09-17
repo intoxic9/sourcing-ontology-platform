@@ -38,10 +38,14 @@ export const week2ManifestSchema = z.strictObject({
   expectedMergeClusters: z.array(expectedMergeClusterSchema),
   expectedNonMergePairs: z.array(expectedNonMergePairSchema),
   demoRoles: z.strictObject({
-    helixSurvivorSourceKey: z.string().min(1),
-    medSourceSurvivorSourceKey: z.string().min(1),
-    helixWeakPartSourceKey: z.string().min(1),
-    helixOnlyDeviceSourceKey: z.string().min(1),
+    /** Survivor LIFNR for supplier-risk demo; must fan out to shared BOM devices. */
+    riskAnchorSurvivorSourceKey: z.string().min(1),
+    /** MATNR whose SUPPLIES edge is the intentional weak link for that anchor. */
+    riskWeakSupplyPartSourceKey: z.string().min(1),
+    riskExpectedDeviceCountMin: z.number().int().positive(),
+    riskExpectedDeviceCountMax: z.number().int().positive(),
+    /** Distinct supplier for approveSupplierChange governance vignette. */
+    governanceSurvivorSourceKey: z.string().min(1),
   }),
   rowCounts: z.strictObject({
     vendor_master: z.number().int().nonnegative(),

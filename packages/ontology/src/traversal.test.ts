@@ -6,6 +6,7 @@ import {
   betterPath,
   CERTAIN,
   collapseToTargets,
+  longestCommonStepPrefixLength,
   makePath,
   pathConfidence,
   pathTarget,
@@ -105,6 +106,24 @@ describe('betterPath', () => {
     const a = makePath(source, [step(node('a'), 0.8)]);
     const b = makePath(source, [step(node('b'), 0.8)]);
     expect(betterPath(a, b)).toBe(a);
+  });
+});
+
+describe('longestCommonStepPrefixLength', () => {
+  it('is zero when paths disagree on the first hop', () => {
+    const a = makePath(source, [step(node('part-a'), 0.9), step(node('dev', 'DEVICE'), 0.8)]);
+    const b = makePath(source, [step(node('part-b'), 0.9), step(node('dev', 'DEVICE'), 0.8)]);
+    expect(longestCommonStepPrefixLength([a, b])).toBe(0);
+  });
+
+  it('counts shared hops before paths diverge', () => {
+    const shared = step(node('part-shared'), 0.51);
+    const a = makePath(source, [shared, step(node('dev-a', 'DEVICE'), 0.62, 'COMPOSED_OF')]);
+    const b = makePath(source, [
+      { ...shared, linkId: 'other-link' },
+      step(node('dev-b', 'DEVICE'), 0.72, 'COMPOSED_OF'),
+    ]);
+    expect(longestCommonStepPrefixLength([a, b])).toBe(1);
   });
 });
 

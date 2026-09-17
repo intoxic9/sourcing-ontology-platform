@@ -4,13 +4,13 @@ DEV-IP200,Infusion Pump 200,Infusion,CLASS_II,ACTIVE
 DEV-BAD-REG-1,Bad reg,Infusion,CLASS_IV,ACTIVE
 DEV-BAD-REG-2,Bad reg two,Infusion,CLASS_IV,ACTIVE
 DEV-BAD-LIFE,Bad life,Infusion,CLASS_II,RETIRED
-DEV-3000,Device family 0,Infusion,CLASS_II,ACTIVE
-DEV-3001,Device family 1,Monitoring,CLASS_II,ACTIVE
-DEV-3002,Device family 2,Infusion,CLASS_II,ACTIVE
-DEV-3003,Device family 3,Monitoring,CLASS_II,ACTIVE
-DEV-3004,Device family 4,Infusion,CLASS_II,ACTIVE
-DEV-3005,Device family 5,Monitoring,CLASS_II,ACTIVE
-DEV-3006,Device family 6,Infusion,CLASS_II,ACTIVE
-DEV-3007,Device family 7,Monitoring,CLASS_II,ACTIVE
-DEV-3008,Device family 8,Infusion,CLASS_II,ACTIVE
-DEV-3009,Device family 9,Monitoring,CLASS_II,ACTIVE
+DEV-3000,Vitals Monitor VM-12,Monitoring,CLASS_II,ACTIVE
+DEV-3001,Portable Ventilator VX-5,Ventilation,CLASS_II,ACTIVE
+DEV-3002,Hemodialysis System HD-400,Renal Care,CLASS_II,ACTIVE
+DEV-3003,Infusion Pump Pro IP-350,Infusion,CLASS_II,ACTIVE
+DEV-3004,Patient Monitor PM-800,Monitoring,CLASS_II,ACTIVE
+DEV-3005,Surgical Power Tool SPT-22,Surgical,CLASS_II,ACTIVE
+DEV-3006,Syringe Pump SP-110,Infusion,CLASS_II,ACTIVE
+DEV-3007,Capnography Monitor CM-9,Monitoring,CLASS_II,ACTIVE
+DEV-3008,CRRT Console RC-700,Renal Care,CLASS_II,ACTIVE
+DEV-3009,Laparoscopic Insufflator LI-50,Surgical,CLASS_II,ACTIVE

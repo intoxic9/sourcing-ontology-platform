@@ -16,10 +16,10 @@ docker compose up -d && pnpm install && pnpm demo
 
 On first clone, copy [`.env.example`](.env.example) to `.env` so `DATABASE_URL` matches `docker-compose.yml` (the demo and store read it; only `@sourcing/ontology-store-postgres` may touch the database).
 
-`pnpm demo` runs migrations, then **`pnpm db:seed`** (truncates and loads the **Week 2 SAP CSV ingest** — one graph, reproducible), then:
+`pnpm demo` runs migrations, then **`pnpm db:seed`** (truncates and loads Week 2 SAP CSV ingest), then:
 
-1. Traverses **supplier device risk** for Helix (`SUPPLIER_DEVICE_RISK`: `SUPPLIES` along, then `COMPOSED_OF` against).
-2. Shows an agent **propose** `approveSupplierChange`, a **blocked** agent execute, and a **human approve** with audit history.
+1. Traverses **supplier device risk** for the manifest **risk anchor** (MedSource-class fan-out: several devices, weak `SUPPLIES` link named on the path).
+2. Runs **approveSupplierChange** on a **different** manifest **governance** supplier (agent propose, blocked execute, human approve).
 
 Other useful commands: `pnpm test`, `pnpm lint`, `pnpm conformance` (in-memory vs Postgres on shared fixtures). Regenerate dirty CSVs with `pnpm generate:week2`; reload DB with `pnpm db:seed` or `pnpm ingest:week2` (both reset the graph first).
 
@@ -28,15 +28,20 @@ Other useful commands: `pnpm test`, `pnpm lint`, `pnpm conformance` (in-memory v
 ## Demo output
 
 ```
-=== Supplier risk: Helix Components International GmbH (…uuid…) ===
-legalName confidence 0.66  status APPROVED
-affected devices: 1
+=== Supplier risk: MedSource GmbH ===
+id …
+status PROVISIONAL   6 devices affected
 
-  Infusor IP-200  confidence 0.55  routes 1
-    …uuid… -->[SUPPLIES 0.48]--> … -->[COMPOSED_OF 0.82]--> …
-    weakest: SUPPLIES @ 0.48  (the fact to go verify)
+  All 6 routes run through one fact:
+    MedSource GmbH --[SUPPLIES 0.51]--> Silicone tubing assembly, 6mm ID
+    ^ weakest link — this is the fact to go verify
 
-=== Agent proposes approveSupplierChange on MedSource GmbH ===
+  Affected devices:
+    Infusion Pump 200            via COMPOSED_OF 0.62   confidence 0.51
+    Vitals Monitor VM-12         via COMPOSED_OF 0.67   confidence 0.51
+    …
+
+=== Agent proposes approveSupplierChange on Continental Precision Machining AG ===
 current status: PROVISIONAL
 proposed audit …  status=PROPOSED
 blocked: agents may propose Actions; they may never execute them
@@ -46,7 +51,7 @@ status after blocked execute: PROVISIONAL
 audit …  status=EXECUTED  approver=k.novak
 status: PROVISIONAL -> APPROVED
 
-=== Audit trail for SUP-MEDSOURCE ===
+=== Audit trail for Continental Precision Machining AG (…) ===
   …  ingestSapWeek2  HUMAN:system-ingest  EXECUTED
   …  approveSupplierChange  AGENT:agent-risk-1  EXECUTED  approved by k.novak
 ```

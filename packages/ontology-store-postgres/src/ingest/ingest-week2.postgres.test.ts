@@ -45,20 +45,20 @@ describe.skipIf(databaseUrl === undefined)('Week 2 ingest pipeline', () => {
       });
       assertReportMatchesManifest(report, manifest.expectedDataQuality);
 
-      const helixId = ingestObjectId(SAP_VENDOR_MASTER, manifest.demoRoles.helixSurvivorSourceKey);
+      const riskId = ingestObjectId(SAP_VENDOR_MASTER, manifest.demoRoles.riskAnchorSurvivorSourceKey);
       const { rows } = await client.query<{ object_type: string }>(
         'SELECT object_type FROM objects WHERE id = $1',
-        [helixId],
+        [riskId],
       );
       expect(rows[0]?.object_type).toBe('SUPPLIER');
 
       const keys = await client.query<{ source_key: string }>(
         `SELECT source_key FROM object_source_keys
           WHERE source_system = $1 AND object_id = $2`,
-        [SAP_VENDOR_MASTER, helixId],
+        [SAP_VENDOR_MASTER, riskId],
       );
       expect(keys.rows.map((row) => row.source_key)).toContain(
-        manifest.demoRoles.helixSurvivorSourceKey,
+        manifest.demoRoles.riskAnchorSurvivorSourceKey,
       );
     });
   });

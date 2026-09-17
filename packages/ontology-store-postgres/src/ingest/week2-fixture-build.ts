@@ -63,6 +63,31 @@ function poolPart(index: number): string {
 }
 
 /** Shared BOM parts — each appears on several devices so anchor suppliers fan out. */
+/** Realistic MAKTX for shared BOM parts (index aligns with MAT-MS-01 … MAT-MS-08). */
+const SHARED_BOM_PART_DESCRIPTIONS = [
+  'PCA pump drive module',
+  'Flow sensor cartridge, 0.5–120 mL/h',
+  'Pressure transducer housing',
+  'Anti-free-flow valve assembly',
+  'Li-ion battery pack, 11.1V 6.6Ah',
+  'Front panel UI board',
+  'Sterile fluid path manifold',
+  'Silicone tubing assembly, 6mm ID',
+] as const;
+
+const WEEK2_DEVICE_CATALOG: readonly { deviceId: string; name: string; family: string }[] = [
+  { deviceId: 'DEV-3000', name: 'Vitals Monitor VM-12', family: 'Monitoring' },
+  { deviceId: 'DEV-3001', name: 'Portable Ventilator VX-5', family: 'Ventilation' },
+  { deviceId: 'DEV-3002', name: 'Hemodialysis System HD-400', family: 'Renal Care' },
+  { deviceId: 'DEV-3003', name: 'Infusion Pump Pro IP-350', family: 'Infusion' },
+  { deviceId: 'DEV-3004', name: 'Patient Monitor PM-800', family: 'Monitoring' },
+  { deviceId: 'DEV-3005', name: 'Surgical Power Tool SPT-22', family: 'Surgical' },
+  { deviceId: 'DEV-3006', name: 'Syringe Pump SP-110', family: 'Infusion' },
+  { deviceId: 'DEV-3007', name: 'Capnography Monitor CM-9', family: 'Monitoring' },
+  { deviceId: 'DEV-3008', name: 'CRRT Console RC-700', family: 'Renal Care' },
+  { deviceId: 'DEV-3009', name: 'Laparoscopic Insufflator LI-50', family: 'Surgical' },
+];
+
 const SHARED_BOM_PARTS = [
   'MAT-MS-01',
   'MAT-MS-02',
@@ -82,6 +107,22 @@ const SHARED_BOM_DEVICES = [
   'DEV-3003',
   'DEV-3004',
 ] as const;
+
+/** Wired with SHARED_BOM_DEVICES + single weak SUPPLIES part so risk demo fans out with a named weak link. */
+const DEMO_RISK_ANCHOR_LIFNR = '100301';
+const DEMO_RISK_WEAK_SUPPLY_PART = 'MAT-MS-08';
+const DEMO_GOVERNANCE_LIFNR = '101001';
+
+function buildDemoRoles(): Week2Manifest['demoRoles'] {
+  const deviceReach = SHARED_BOM_DEVICES.length;
+  return {
+    riskAnchorSurvivorSourceKey: DEMO_RISK_ANCHOR_LIFNR,
+    riskWeakSupplyPartSourceKey: DEMO_RISK_WEAK_SUPPLY_PART,
+    riskExpectedDeviceCountMin: Math.min(4, deviceReach),
+    riskExpectedDeviceCountMax: deviceReach,
+    governanceSurvivorSourceKey: DEMO_GOVERNANCE_LIFNR,
+  };
+}
 
 function buildSupplyRows(
   anchorLifnr: string,
@@ -312,7 +353,7 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
     { MATNR: 'MAT-HELIX-01', MAKTX: 'Helix weak pump head', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '14.50' },
     ...SHARED_BOM_PARTS.map((matnr, index) => ({
       MATNR: matnr,
-      MAKTX: `Shared subassembly ${String(index + 1)}`,
+      MAKTX: SHARED_BOM_PART_DESCRIPTIONS[index] ?? `Subassembly ${String(index + 1)}`,
       CLASS: 'SUBASSEMBLY' as const,
       CRITICALITY: index === 0 ? ('CRITICAL' as const) : ('MAJOR' as const),
       UNIT_COST: String(8 + index * 2.5),
@@ -332,23 +373,16 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
     { DEVICE_ID: 'DEV-BAD-REG-1', DEVICE_NAME: 'Bad reg', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_IV', LIFECYCLE: 'ACTIVE' },
     { DEVICE_ID: 'DEV-BAD-REG-2', DEVICE_NAME: 'Bad reg two', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_IV', LIFECYCLE: 'ACTIVE' },
     { DEVICE_ID: 'DEV-BAD-LIFE', DEVICE_NAME: 'Bad life', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_II', LIFECYCLE: 'RETIRED' },
-    ...Array.from({ length: 10 }, (_, index) => ({
-      DEVICE_ID: `DEV-${String(3000 + index)}`,
-      DEVICE_NAME: `Device family ${String(index)}`,
-      PRODUCT_FAMILY: index % 2 === 0 ? 'Infusion' : 'Monitoring',
-      REG_CLASS: 'CLASS_II',
-      LIFECYCLE: 'ACTIVE',
+    ...WEEK2_DEVICE_CATALOG.map((entry) => ({
+      DEVICE_ID: entry.deviceId,
+      DEVICE_NAME: entry.name,
+      PRODUCT_FAMILY: entry.family,
+      REG_CLASS: 'CLASS_II' as const,
+      LIFECYCLE: 'ACTIVE' as const,
     })),
   ];
 
-  const medSourceParts = [
-    ...SHARED_BOM_PARTS,
-    poolPart(0),
-    poolPart(1),
-    poolPart(2),
-    poolPart(3),
-    poolPart(4),
-  ];
+  const medSourceParts = [DEMO_RISK_WEAK_SUPPLY_PART] as const;
 
   const supply_relationship: SupplyRow[] = [
     { LIFNR: '999998', MATNR: poolPart(0), CONFIDENCE: '0.9' },
@@ -357,10 +391,9 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
     { LIFNR: '100301', MATNR: 'MAT-ORPHAN', CONFIDENCE: '0.9' },
     { LIFNR: '100301', MATNR: poolPart(5), CONFIDENCE: '0.9' },
     { LIFNR: '100701', MATNR: 'MAT-HELIX-01', CONFIDENCE: '0.48' },
-    ...buildSupplyRows('100301', medSourceParts, (matnr, index) => {
-      if (matnr === 'MAT-MS-08') return 0.51;
-      return 0.72 + (index % 5) * 0.05;
-    }),
+    ...buildSupplyRows('100301', medSourceParts, (matnr) =>
+      matnr === DEMO_RISK_WEAK_SUPPLY_PART ? 0.51 : 0.72,
+    ),
     ...buildSupplyRows('101001', [poolPart(10), poolPart(11), poolPart(12), poolPart(13), poolPart(14), poolPart(15), poolPart(16), poolPart(17), poolPart(18), poolPart(19)], (_, index) => 0.65 + (index % 4) * 0.08),
     ...buildSupplyRows('101002', [poolPart(20), poolPart(21), poolPart(22), poolPart(23), poolPart(24), poolPart(25), poolPart(26), poolPart(27)], (_, index) => 0.7 + (index % 3) * 0.07),
     ...buildSupplyRows(
@@ -481,12 +514,7 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
     expectedNonMergePairs: [
       { sourceKeyA: '100801', sourceKeyB: '100802', note: 'Devices vs Diagnostics' },
     ],
-    demoRoles: {
-      helixSurvivorSourceKey: '100701',
-      medSourceSurvivorSourceKey: '100301',
-      helixWeakPartSourceKey: 'MAT-HELIX-01',
-      helixOnlyDeviceSourceKey: 'DEV-IP200',
-    },
+    demoRoles: buildDemoRoles(),
     rowCounts: {
       vendor_master: vendor_master.length,
       material_master: material_master.length,

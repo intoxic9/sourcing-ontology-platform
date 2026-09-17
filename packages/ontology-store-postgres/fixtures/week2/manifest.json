@@ -83,16 +83,17 @@
     }
   ],
   "demoRoles": {
-    "helixSurvivorSourceKey": "100701",
-    "medSourceSurvivorSourceKey": "100301",
-    "helixWeakPartSourceKey": "MAT-HELIX-01",
-    "helixOnlyDeviceSourceKey": "DEV-IP200"
+    "riskAnchorSurvivorSourceKey": "100301",
+    "riskWeakSupplyPartSourceKey": "MAT-MS-08",
+    "riskExpectedDeviceCountMin": 4,
+    "riskExpectedDeviceCountMax": 6,
+    "governanceSurvivorSourceKey": "101001"
   },
   "rowCounts": {
     "vendor_master": 54,
     "material_master": 95,
     "device_master": 15,
-    "supply_relationship": 104,
+    "supply_relationship": 92,
     "device_bom": 112
   }
 }
