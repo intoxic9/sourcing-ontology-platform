@@ -21,7 +21,9 @@
     "db:migrate": "turbo run db:migrate",
     "db:seed": "turbo run db:seed",
     "conformance": "turbo run conformance",
-    "demo": "turbo run demo"
+    "demo": "turbo run demo",
+    "generate:week2": "pnpm --filter @sourcing/ontology-store-postgres run generate:week2",
+    "ingest:week2": "pnpm --filter @sourcing/ontology-store-postgres run ingest:week2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,15 @@
+DEVICE_ID,DEVICE_NAME,PRODUCT_FAMILY,REG_CLASS,LIFECYCLE
+,Missing id,Infusion,CLASS_II,ACTIVE
+DEV-IP200,Infusion Pump 200,Infusion,CLASS_II,ACTIVE
+DEV-BAD-REG,Bad reg,Infusion,CLASS_IV,ACTIVE
+DEV-BAD-LIFE,Bad life,Infusion,CLASS_II,RETIRED
+DEV-3000,Device family 0,Infusion,CLASS_II,ACTIVE
+DEV-3001,Device family 1,Monitoring,CLASS_II,ACTIVE
+DEV-3002,Device family 2,Infusion,CLASS_II,ACTIVE
+DEV-3003,Device family 3,Monitoring,CLASS_II,ACTIVE
+DEV-3004,Device family 4,Infusion,CLASS_II,ACTIVE
+DEV-3005,Device family 5,Monitoring,CLASS_II,ACTIVE
+DEV-3006,Device family 6,Infusion,CLASS_II,ACTIVE
+DEV-3007,Device family 7,Monitoring,CLASS_II,ACTIVE
+DEV-3008,Device family 8,Infusion,CLASS_II,ACTIVE
+DEV-3009,Device family 9,Monitoring,CLASS_II,ACTIVE

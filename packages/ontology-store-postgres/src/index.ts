@@ -35,3 +35,12 @@ export {
   updateProperty,
   type Queryable,
 } from './repository.js';
+export {
+  loadWeek2CsvBundle,
+  loadWeek2Manifest,
+  planWeek2Ingest,
+  runWeek2Ingest,
+  week2FixtureDir,
+} from './ingest/run-week2-ingest.js';
+export { buildWeek2Fixtures, week2FixtureCsvFiles } from './ingest/week2-fixture-build.js';
+export { ingestObjectId } from './ingest/object-id.js';

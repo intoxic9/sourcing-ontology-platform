@@ -159,3 +159,36 @@ export {
 } from './flag-part.js';
 
 export { ONTOLOGY_SCHEMA_VERSION } from './constants.js';
+
+export {
+  assertReportMatchesManifest,
+  buildIngestPlan,
+  collapseWhitespace,
+  emptyRejectCounts,
+  emptySkippedLinkCounts,
+  ingestRejectCodeSchema,
+  ingestSkippedLinkCodeSchema,
+  normalizeLegalNameForMatch,
+  normalizeSourceKey,
+  SAP_DEVICE_BOM,
+  SAP_DEVICE_MASTER,
+  SAP_MATERIAL_MASTER,
+  SAP_SUPPLY_REL,
+  SAP_VENDOR_MASTER,
+  tallyRejects,
+  tallySkippedLinks,
+  vendorMasterRowSchema,
+  materialMasterRowSchema,
+  deviceMasterRowSchema,
+  supplyRelationshipRowSchema,
+  deviceBomRowSchema,
+  week2ManifestSchema,
+  type DataQualityReport,
+  type ExpectedMergeCluster,
+  type IngestCsvBundle,
+  type IngestObjectIdResolver,
+  type IngestPlan,
+  type IngestRejectCode,
+  type IngestSkippedLinkCode,
+  type Week2Manifest,
+} from './ingest/index.js';

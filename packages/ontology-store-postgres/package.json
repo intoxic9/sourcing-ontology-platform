@@ -23,7 +23,9 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "conformance": "tsx src/conformance.ts",
-    "demo": "tsx src/demo.ts"
+    "demo": "tsx src/demo.ts",
+    "generate:week2": "pnpm --filter @sourcing/ontology build && tsx scripts/generate-week2-fixtures.ts",
+    "ingest:week2": "tsx src/ingest/cli-week2-ingest.ts"
   },
   "dependencies": {
     "@sourcing/ontology": "workspace:*",

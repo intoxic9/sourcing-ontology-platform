@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "fixtureId": "week2-sap-v1",
+  "expectedDataQuality": {
+    "rejectsByCode": {
+      "VENDOR_MISSING_LIFNR": 1,
+      "VENDOR_MISSING_NAME": 1,
+      "VENDOR_INVALID_TIER": 1,
+      "VENDOR_INVALID_QUALITY_RATING": 1,
+      "VENDOR_DUPLICATE_LIFNR": 1,
+      "MATERIAL_MISSING_MATNR": 1,
+      "MATERIAL_INVALID_UNIT_COST": 1,
+      "MATERIAL_INVALID_CLASSIFICATION": 1,
+      "MATERIAL_INVALID_CRITICALITY": 1,
+      "DEVICE_MISSING_ID": 1,
+      "DEVICE_MISSING_NAME": 0,
+      "DEVICE_INVALID_REG_CLASS": 1,
+      "DEVICE_INVALID_LIFECYCLE": 1
+    },
+    "skippedLinksByCode": {
+      "SUPPLY_ORPHAN_VENDOR": 1,
+      "SUPPLY_ORPHAN_MATERIAL": 1,
+      "BOM_ORPHAN_DEVICE": 1,
+      "BOM_ORPHAN_PART": 1
+    }
+  },
+  "expectedMergeClusters": [
+    {
+      "band": "AUTO_CONFIRM",
+      "survivorSourceKey": "100301",
+      "duplicateSourceKeys": [
+        "100302",
+        "100303"
+      ],
+      "note": "MedSource legal-suffix and casing drift, shared DUNS"
+    },
+    {
+      "band": "AUTO_CONFIRM",
+      "survivorSourceKey": "100401",
+      "duplicateSourceKeys": [
+        "100402"
+      ],
+      "note": "Nordic Sterile suffix variant"
+    },
+    {
+      "band": "AUTO_CONFIRM",
+      "survivorSourceKey": "100501",
+      "duplicateSourceKeys": [
+        "100502"
+      ],
+      "note": "Transposed tokens + shared DUNS"
+    },
+    {
+      "band": "AUTO_CONFIRM",
+      "survivorSourceKey": "100701",
+      "duplicateSourceKeys": [
+        "100702"
+      ],
+      "note": "Helix abbreviation and suffix drift"
+    },
+    {
+      "band": "REQUIRE_HUMAN",
+      "survivorSourceKey": "100601",
+      "duplicateSourceKeys": [
+        "100602"
+      ],
+      "note": "Abbreviated Med. vs Medical"
+    },
+    {
+      "band": "REQUIRE_HUMAN",
+      "survivorSourceKey": "100611",
+      "duplicateSourceKeys": [
+        "100612"
+      ],
+      "note": "Rhine Valley vs Rhine Vly"
+    }
+  ],
+  "expectedNonMergePairs": [
+    {
+      "sourceKeyA": "100801",
+      "sourceKeyB": "100802",
+      "note": "Devices vs Diagnostics"
+    }
+  ],
+  "demoRoles": {
+    "helixSurvivorSourceKey": "100701",
+    "medSourceSurvivorSourceKey": "100301",
+    "helixWeakPartSourceKey": "MAT-HELIX-01",
+    "helixOnlyDeviceSourceKey": "DEV-IP200"
+  },
+  "rowCounts": {
+    "vendor_master": 33,
+    "material_master": 43,
+    "device_master": 14,
+    "supply_relationship": 41,
+    "device_bom": 64
+  }
+}
