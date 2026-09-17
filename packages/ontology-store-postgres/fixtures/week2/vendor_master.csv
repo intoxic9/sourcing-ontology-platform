@@ -1,8 +1,16 @@
 LIFNR,NAME1,LAND1,TIER,DUNS,QUALITY_RATING,CERTIFICATIONS
 ,Ghost Vendor,DE,TIER_2,,70,
 100001,   ,DE,TIER_2,,70,
+100005,,DE,TIER_2,,70,
+100006,  	  ,DE,TIER_2,,70,
 100002,Bad Tier AG,DE,TIER_9,,70,
+100007,Also Bad Tier,DE,TIER_X,,70,
+100008,Tier Typo GmbH,DE,TIER1,,70,
+100009,Empty Tier,DE,,,70,
 100003,Bad Rating GmbH,DE,TIER_2,,excellent,
+100010,NaN Rating,DE,TIER_2,,N/A,
+100011,Text Rating,DE,TIER_2,,high,
+100012,Blank Rating,DE,TIER_2,,,
 100004,First LIFNR Row,DE,TIER_2,,72,
 100004,Duplicate LIFNR Row,DE,TIER_2,,72,
 100301,MedSource GmbH,DE,TIER_1,314159265,88,ISO 13485|ISO 9001
@@ -20,15 +28,28 @@ LIFNR,NAME1,LAND1,TIER,DUNS,QUALITY_RATING,CERTIFICATIONS
 100802,Alpha Med Diagnostics GmbH,DE,TIER_2,990001002,73,
 100701,Helix Components International GmbH,CH,TIER_2,424242424,62,ISO 13485
 100702,Helix Components Intl.  G.m.b.H.,CH,TIER_2,424242424,61,ISO 13485
-101000,Tier One Partner 1 GmbH,DE,TIER_1,,80,ISO 13485
-101001,Tier One Partner 2 GmbH,US,TIER_1,,81,ISO 13485
-101002,Tier One Partner 3 GmbH,MX,TIER_1,,82,ISO 13485
-101003,Tier One Partner 4 GmbH,DE,TIER_1,,83,ISO 13485
-101004,Tier One Partner 5 GmbH,US,TIER_1,,84,ISO 13485
-101005,Tier One Partner 6 GmbH,MX,TIER_1,,80,ISO 13485
-101006,Tier One Partner 7 GmbH,DE,TIER_1,,81,ISO 13485
-101007,Tier One Partner 8 GmbH,US,TIER_1,,82,ISO 13485
-101008,Tier One Partner 9 GmbH,MX,TIER_1,,83,ISO 13485
-101009,Tier One Partner 10 GmbH,DE,TIER_1,,84,ISO 13485
-101010,Tier One Partner 11 GmbH,US,TIER_1,,80,ISO 13485
-101011,Tier One Partner 12 GmbH,MX,TIER_1,,81,ISO 13485
+101001,Continental Precision Machining AG,DE,TIER_1,,86,ISO 13485
+101002,Pacific Biomaterials Inc.,US,TIER_1,,84,ISO 13485
+101003,Danube Electromechanical GmbH,AT,TIER_1,,83,ISO 13485|ISO 9001
+101010,Regional Supplier 1 Ltd,IE,TIER_2,,72,ISO 9001
+101011,Regional Supplier 2 Ltd,PL,TIER_2,,73,
+101012,Regional Supplier 3 Ltd,IE,TIER_2,,74,
+101013,Regional Supplier 4 Ltd,PL,TIER_2,,75,ISO 9001
+101014,Regional Supplier 5 Ltd,IE,TIER_2,,76,
+101015,Regional Supplier 6 Ltd,PL,TIER_2,,77,
+101016,Regional Supplier 7 Ltd,IE,TIER_2,,72,ISO 9001
+101017,Regional Supplier 8 Ltd,PL,TIER_2,,73,
+101020,Boutique Vendor 1,MX,TIER_3,,60,
+101021,Boutique Vendor 2,MX,TIER_3,,61,
+101022,Boutique Vendor 3,MX,TIER_3,,62,
+101023,Boutique Vendor 4,MX,TIER_3,,63,
+101024,Boutique Vendor 5,MX,TIER_3,,64,
+101025,Boutique Vendor 6,MX,TIER_3,,65,
+101026,Boutique Vendor 7,MX,TIER_3,,66,
+101027,Boutique Vendor 8,MX,TIER_3,,67,
+101028,Boutique Vendor 9,MX,TIER_3,,60,
+101029,Boutique Vendor 10,MX,TIER_3,,61,
+101030,Boutique Vendor 11,MX,TIER_3,,62,
+101031,Boutique Vendor 12,MX,TIER_3,,63,
+101032,Boutique Vendor 13,MX,TIER_3,,64,
+101033,Boutique Vendor 14,MX,TIER_3,,65,

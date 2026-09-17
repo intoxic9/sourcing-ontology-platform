@@ -1,3 +1,7 @@
+/**
+ * Week 1 narrative graph (reference / legacy ids). `pnpm db:seed` loads Week 2 CSV
+ * ingest instead. Tests and conformance use @sourcing/ontology fixtures, not this file.
+ */
 import type { InMemoryGraph, InMemoryObject } from '@sourcing/ontology';
 import type { Link, LinkTypeName, ObjectOf, Tracked } from '@sourcing/ontology';
 

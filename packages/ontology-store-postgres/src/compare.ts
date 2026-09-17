@@ -9,6 +9,7 @@ import {
 
 import { createPostgresContext } from './context.js';
 import { assertSupportedSchema, insertGraph, type Queryable } from './repository.js';
+import { truncateOntologyData } from './reset-graph.js';
 
 function stable(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -24,11 +25,7 @@ export async function compareFixtureTraversals(db: Queryable): Promise<number> {
   const postgres = createPostgresContext(db);
 
   for (const [index, conformanceCase] of patternConformanceCases.entries()) {
-    await db.query('DELETE FROM audit_record_objects');
-    await db.query('DELETE FROM audit_records');
-    await db.query('DELETE FROM links');
-    await db.query('DELETE FROM object_properties');
-    await db.query('DELETE FROM objects');
+    await truncateOntologyData(db);
 
     const memory = createInMemoryContext(conformanceCase.fixture);
     await insertGraph(db, conformanceCase.fixture);

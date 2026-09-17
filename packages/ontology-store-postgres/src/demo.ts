@@ -1,9 +1,11 @@
 /**
- * Week 1 demo: a supplier-risk traversal with a real weakest link, an agent-proposed
- * Action that is blocked, a human approval, and the audit trail that recorded it.
+ * Week 1 demo: supplier-risk traversal, agent propose / human approve on ingested data.
+ * Requires `pnpm db:seed` (Week 2 CSV ingest, not the old seed graph).
  */
 import {
   AgentExecutionBlockedError,
+  SAP_DEVICE_MASTER,
+  SAP_VENDOR_MASTER,
   SUPPLIER_DEVICE_RISK,
   weakestLink,
   type PathStep,
@@ -13,11 +15,8 @@ import { Pool } from 'pg';
 import { createPostgresContext } from './context.js';
 import { requireDatabaseUrl } from './env.js';
 import { approveAction, executeProposedAs, objectAuditHistory, proposeAction } from './governance.js';
-import {
-  DEMO_HELIX_DEVICE,
-  DEMO_SUPPLIER_ACTION,
-  DEMO_SUPPLIER_RISK,
-} from './seed-data.js';
+import { ingestObjectId } from './ingest/object-id.js';
+import { loadWeek2Manifest } from './ingest/run-week2-ingest.js';
 
 function hop(step: PathStep): string {
   const arrow = step.direction === 'ALONG' ? '-->' : '<--';
@@ -27,11 +26,17 @@ function hop(step: PathStep): string {
 const pool = new Pool({ connectionString: requireDatabaseUrl() });
 
 try {
+  const manifest = await loadWeek2Manifest();
+  const roles = manifest.demoRoles;
+  const helixId = ingestObjectId(SAP_VENDOR_MASTER, roles.helixSurvivorSourceKey);
+  const medSourceId = ingestObjectId(SAP_VENDOR_MASTER, roles.medSourceSurvivorSourceKey);
+  const helixDeviceId = ingestObjectId(SAP_DEVICE_MASTER, roles.helixOnlyDeviceSourceKey);
+
   const ctx = createPostgresContext(pool);
 
-  const helix = await ctx.getObject('SUPPLIER', DEMO_SUPPLIER_RISK);
+  const helix = await ctx.getObject('SUPPLIER', helixId);
   if (helix === undefined) {
-    throw new Error('seed has not been loaded. Run `pnpm db:seed` first.');
+    throw new Error('demo graph not loaded. Run `pnpm db:seed` (Week 2 ingest) first.');
   }
 
   console.log(`=== Supplier risk: ${helix.legalName.value} (${helix.id}) ===`);
@@ -45,9 +50,9 @@ try {
   });
 
   const affectedIds = result.targets.map((entry) => entry.target.id).sort();
-  if (affectedIds.length !== 1 || affectedIds[0] !== DEMO_HELIX_DEVICE) {
+  if (affectedIds.length !== 1 || affectedIds[0] !== helixDeviceId) {
     console.log(
-      `ERROR: expected exactly ${DEMO_HELIX_DEVICE}, got: ${affectedIds.join(', ') || '(none)'}`,
+      `ERROR: expected exactly ${helixDeviceId}, got: ${affectedIds.join(', ') || '(none)'}`,
     );
     process.exitCode = 1;
   }
@@ -70,8 +75,10 @@ try {
     }
   }
 
-  const medsource = await ctx.getObject('SUPPLIER', DEMO_SUPPLIER_ACTION);
-  if (medsource === undefined) throw new Error(`missing ${DEMO_SUPPLIER_ACTION}`);
+  const medsource = await ctx.getObject('SUPPLIER', medSourceId);
+  if (medsource === undefined) {
+    throw new Error(`missing MedSource survivor ${roles.medSourceSurvivorSourceKey}`);
+  }
 
   console.log(`\n=== Agent proposes approveSupplierChange on ${medsource.legalName.value} ===`);
   console.log(`current status: ${medsource.status.value}`);

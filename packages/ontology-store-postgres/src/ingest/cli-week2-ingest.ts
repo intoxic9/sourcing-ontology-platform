@@ -2,6 +2,11 @@ import { Pool } from 'pg';
 
 import { loadDatabaseUrl } from '../env.js';
 import { assertSupportedSchema } from '../repository.js';
+import {
+  DEMO_WEEK2_EXTRACTED_AT,
+  DEMO_WEEK2_PIPELINE_RUN_ID,
+  truncateOntologyData,
+} from '../reset-graph.js';
 import { loadWeek2Manifest, runWeek2Ingest } from './run-week2-ingest.js';
 
 const databaseUrl = loadDatabaseUrl();
@@ -14,10 +19,14 @@ const client = await pool.connect();
 
 try {
   await assertSupportedSchema(client);
+  await client.query('BEGIN');
+  await truncateOntologyData(client);
   const manifest = await loadWeek2Manifest();
   const { report } = await runWeek2Ingest(client, {
-    pipelineRunId: `cli-${new Date().toISOString()}`,
+    pipelineRunId: DEMO_WEEK2_PIPELINE_RUN_ID,
+    extractedAt: DEMO_WEEK2_EXTRACTED_AT,
   });
+  await client.query('COMMIT');
 
   console.log(`fixture: ${manifest.fixtureId}`);
   console.log(
@@ -28,6 +37,9 @@ try {
   );
   console.log('rejects:', report.rejectsByCode);
   console.log('skipped links:', report.skippedLinksByCode);
+} catch (error) {
+  await client.query('ROLLBACK');
+  throw error;
 } finally {
   client.release();
   await pool.end();

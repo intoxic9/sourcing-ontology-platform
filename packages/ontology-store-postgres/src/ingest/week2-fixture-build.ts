@@ -58,17 +58,62 @@ function toCsv(headers: readonly string[], rows: Record<string, string>[]): stri
   return `${lines.join('\n')}\n`;
 }
 
+function poolPart(index: number): string {
+  return `MAT-${String(2000 + index).padStart(4, '0')}`;
+}
+
+/** Shared BOM parts — each appears on several devices so anchor suppliers fan out. */
+const SHARED_BOM_PARTS = [
+  'MAT-MS-01',
+  'MAT-MS-02',
+  'MAT-MS-03',
+  'MAT-MS-04',
+  'MAT-MS-05',
+  'MAT-MS-06',
+  'MAT-MS-07',
+  'MAT-MS-08',
+] as const;
+
+const SHARED_BOM_DEVICES = [
+  'DEV-IP200',
+  'DEV-3000',
+  'DEV-3001',
+  'DEV-3002',
+  'DEV-3003',
+  'DEV-3004',
+] as const;
+
+function buildSupplyRows(
+  anchorLifnr: string,
+  partIds: readonly string[],
+  confidenceFor: (matnr: string, index: number) => number,
+): SupplyRow[] {
+  return partIds.map((matnr, index) => ({
+    LIFNR: anchorLifnr,
+    MATNR: matnr,
+    CONFIDENCE: confidenceFor(matnr, index).toFixed(2),
+  }));
+}
+
 export function buildWeek2Fixtures(): Week2FixtureFiles {
   const vendor_master: VendorRow[] = [
-    // --- DQ rejects (must stay in the file) ---
+    // --- DQ rejects (kept in file; counts vary by code) ---
     { LIFNR: '', NAME1: 'Ghost Vendor', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
     { LIFNR: '100001', NAME1: '   ', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
+    { LIFNR: '100005', NAME1: '', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
+    { LIFNR: '100006', NAME1: '  \t  ', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
     { LIFNR: '100002', NAME1: 'Bad Tier AG', LAND1: 'DE', TIER: 'TIER_9', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
+    { LIFNR: '100007', NAME1: 'Also Bad Tier', LAND1: 'DE', TIER: 'TIER_X', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
+    { LIFNR: '100008', NAME1: 'Tier Typo GmbH', LAND1: 'DE', TIER: 'TIER1', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
+    { LIFNR: '100009', NAME1: 'Empty Tier', LAND1: 'DE', TIER: '', DUNS: '', QUALITY_RATING: '70', CERTIFICATIONS: '' },
     { LIFNR: '100003', NAME1: 'Bad Rating GmbH', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: 'excellent', CERTIFICATIONS: '' },
+    { LIFNR: '100010', NAME1: 'NaN Rating', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: 'N/A', CERTIFICATIONS: '' },
+    { LIFNR: '100011', NAME1: 'Text Rating', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: 'high', CERTIFICATIONS: '' },
+    { LIFNR: '100012', NAME1: 'Blank Rating', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '', CERTIFICATIONS: '' },
     { LIFNR: '100004', NAME1: 'First LIFNR Row', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '72', CERTIFICATIONS: '' },
     { LIFNR: '100004', NAME1: 'Duplicate LIFNR Row', LAND1: 'DE', TIER: 'TIER_2', DUNS: '', QUALITY_RATING: '72', CERTIFICATIONS: '' },
 
-    // --- AUTO_CONFIRM clusters ---
+    // --- Merge clusters (unchanged keys) ---
     {
       LIFNR: '100301',
       NAME1: 'MedSource GmbH',
@@ -132,8 +177,6 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
       QUALITY_RATING: '78',
       CERTIFICATIONS: '',
     },
-
-    // --- REQUIRE_HUMAN clusters ---
     {
       LIFNR: '100601',
       NAME1: 'Bavarian Medical Supplies GmbH',
@@ -170,8 +213,6 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
       QUALITY_RATING: '67',
       CERTIFICATIONS: '',
     },
-
-    // --- DO_NOT_MERGE bait (similar names, different DUNS) ---
     {
       LIFNR: '100801',
       NAME1: 'Alpha Med Devices GmbH',
@@ -190,8 +231,6 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
       QUALITY_RATING: '73',
       CERTIFICATIONS: '',
     },
-
-    // --- Helix narrative (weak link) ---
     {
       LIFNR: '100701',
       NAME1: 'Helix Components International GmbH',
@@ -211,40 +250,87 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
       CERTIFICATIONS: 'ISO 13485',
     },
 
-    // --- Unique suppliers for fan-out (unique LIFNR each) ---
-    ...Array.from({ length: 12 }, (_, index) => {
-      const id = 101000 + index;
-      return {
-        LIFNR: String(id),
-        NAME1: `Tier One Partner ${String(index + 1)} GmbH`,
-        LAND1: index % 3 === 0 ? 'DE' : index % 3 === 1 ? 'US' : 'MX',
-        TIER: 'TIER_1',
-        DUNS: '',
-        QUALITY_RATING: String(80 + (index % 5)),
-        CERTIFICATIONS: 'ISO 13485',
-      } satisfies VendorRow;
-    }),
+    // Anchor-tier fan-out suppliers (8–15 parts each in supply_relationship)
+    {
+      LIFNR: '101001',
+      NAME1: 'Continental Precision Machining AG',
+      LAND1: 'DE',
+      TIER: 'TIER_1',
+      DUNS: '',
+      QUALITY_RATING: '86',
+      CERTIFICATIONS: 'ISO 13485',
+    },
+    {
+      LIFNR: '101002',
+      NAME1: 'Pacific Biomaterials Inc.',
+      LAND1: 'US',
+      TIER: 'TIER_1',
+      DUNS: '',
+      QUALITY_RATING: '84',
+      CERTIFICATIONS: 'ISO 13485',
+    },
+    {
+      LIFNR: '101003',
+      NAME1: 'Danube Electromechanical GmbH',
+      LAND1: 'AT',
+      TIER: 'TIER_1',
+      DUNS: '',
+      QUALITY_RATING: '83',
+      CERTIFICATIONS: 'ISO 13485|ISO 9001',
+    },
+
+    // Middle tier (3–5 parts)
+    ...Array.from({ length: 8 }, (_, index) => ({
+      LIFNR: String(101010 + index),
+      NAME1: `Regional Supplier ${String(index + 1)} Ltd`,
+      LAND1: index % 2 === 0 ? 'IE' : 'PL',
+      TIER: 'TIER_2',
+      DUNS: '',
+      QUALITY_RATING: String(72 + (index % 6)),
+      CERTIFICATIONS: index % 3 === 0 ? 'ISO 9001' : '',
+    })),
+
+    // Long tail (1–2 parts)
+    ...Array.from({ length: 14 }, (_, index) => ({
+      LIFNR: String(101020 + index),
+      NAME1: `Boutique Vendor ${String(index + 1)}`,
+      LAND1: 'MX',
+      TIER: 'TIER_3',
+      DUNS: '',
+      QUALITY_RATING: String(60 + (index % 8)),
+      CERTIFICATIONS: '',
+    })),
   ];
 
   const material_master: MaterialRow[] = [
     { MATNR: '', MAKTX: 'Missing number', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '1.00' },
-    { MATNR: 'MAT-BAD-COST', MAKTX: 'Bad cost', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '-3' },
-    { MATNR: 'MAT-BAD-CLASS', MAKTX: 'Bad class', CLASS: 'WIDGET', CRITICALITY: 'MAJOR', UNIT_COST: '2' },
-    { MATNR: 'MAT-BAD-CRIT', MAKTX: 'Bad crit', CLASS: 'COMPONENT', CRITICALITY: 'LOW', UNIT_COST: '2' },
+    { MATNR: 'MAT-BAD-COST-1', MAKTX: 'Bad cost negative', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '-3' },
+    { MATNR: 'MAT-BAD-COST-2', MAKTX: 'Bad cost text', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: 'free' },
+    { MATNR: 'MAT-BAD-COST-3', MAKTX: 'Bad cost empty', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '' },
+    { MATNR: 'MAT-BAD-CLASS-1', MAKTX: 'Bad class', CLASS: 'WIDGET', CRITICALITY: 'MAJOR', UNIT_COST: '2' },
+    { MATNR: 'MAT-BAD-CLASS-2', MAKTX: 'Bad class typo', CLASS: 'COMP', CRITICALITY: 'MAJOR', UNIT_COST: '2' },
     { MATNR: 'MAT-HELIX-01', MAKTX: 'Helix weak pump head', CLASS: 'COMPONENT', CRITICALITY: 'MAJOR', UNIT_COST: '14.50' },
-    ...Array.from({ length: 38 }, (_, index) => ({
-      MATNR: `MAT-${String(2000 + index).padStart(4, '0')}`,
-      MAKTX: `Generic component ${String(index)}`,
-      CLASS: index % 4 === 0 ? 'DIRECT_MATERIAL' : 'COMPONENT',
-      CRITICALITY: index % 7 === 0 ? 'CRITICAL' : 'MAJOR',
-      UNIT_COST: String((index + 1) * 1.25),
+    ...SHARED_BOM_PARTS.map((matnr, index) => ({
+      MATNR: matnr,
+      MAKTX: `Shared subassembly ${String(index + 1)}`,
+      CLASS: 'SUBASSEMBLY' as const,
+      CRITICALITY: index === 0 ? ('CRITICAL' as const) : ('MAJOR' as const),
+      UNIT_COST: String(8 + index * 2.5),
+    })),
+    ...Array.from({ length: 80 }, (_, index) => ({
+      MATNR: poolPart(index),
+      MAKTX: `Pool component ${String(index)}`,
+      CLASS: index % 5 === 0 ? 'DIRECT_MATERIAL' : 'COMPONENT',
+      CRITICALITY: index % 11 === 0 ? 'CRITICAL' : 'MAJOR',
+      UNIT_COST: String((index + 1) * 1.15),
     })),
   ];
 
   const device_master: DeviceRow[] = [
     { DEVICE_ID: '', DEVICE_NAME: 'Missing id', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_II', LIFECYCLE: 'ACTIVE' },
     { DEVICE_ID: 'DEV-IP200', DEVICE_NAME: 'Infusion Pump 200', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_II', LIFECYCLE: 'ACTIVE' },
-    { DEVICE_ID: 'DEV-BAD-REG', DEVICE_NAME: 'Bad reg', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_IV', LIFECYCLE: 'ACTIVE' },
+    { DEVICE_ID: 'DEV-BAD-REG-1', DEVICE_NAME: 'Bad reg', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_IV', LIFECYCLE: 'ACTIVE' },
+    { DEVICE_ID: 'DEV-BAD-REG-2', DEVICE_NAME: 'Bad reg two', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_IV', LIFECYCLE: 'ACTIVE' },
     { DEVICE_ID: 'DEV-BAD-LIFE', DEVICE_NAME: 'Bad life', PRODUCT_FAMILY: 'Infusion', REG_CLASS: 'CLASS_II', LIFECYCLE: 'RETIRED' },
     ...Array.from({ length: 10 }, (_, index) => ({
       DEVICE_ID: `DEV-${String(3000 + index)}`,
@@ -255,35 +341,73 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
     })),
   ];
 
+  const medSourceParts = [
+    ...SHARED_BOM_PARTS,
+    poolPart(0),
+    poolPart(1),
+    poolPart(2),
+    poolPart(3),
+    poolPart(4),
+  ];
+
   const supply_relationship: SupplyRow[] = [
-    { LIFNR: '999999', MATNR: 'MAT-2000', CONFIDENCE: '0.9' },
-    { LIFNR: '100301', MATNR: 'MAT-9999', CONFIDENCE: '0.9' },
+    { LIFNR: '999998', MATNR: poolPart(0), CONFIDENCE: '0.9' },
+    { LIFNR: '999997', MATNR: poolPart(1), CONFIDENCE: '0.9' },
+    { LIFNR: '999999', MATNR: poolPart(2), CONFIDENCE: '0.9' },
+    { LIFNR: '100301', MATNR: 'MAT-ORPHAN', CONFIDENCE: '0.9' },
+    { LIFNR: '100301', MATNR: poolPart(5), CONFIDENCE: '0.9' },
     { LIFNR: '100701', MATNR: 'MAT-HELIX-01', CONFIDENCE: '0.48' },
-    { LIFNR: '100301', MATNR: 'MAT-2000', CONFIDENCE: '0.92' },
-    { LIFNR: '100301', MATNR: 'MAT-2001', CONFIDENCE: '0.88' },
-    ...vendor_master
-      .filter((row) => row.LIFNR.startsWith('101') && row.LIFNR.length === 6)
-      .flatMap((row, vendorIndex) =>
-        Array.from({ length: 3 }, (_, partOffset) => ({
-          LIFNR: row.LIFNR,
-          MATNR: `MAT-${String(2000 + ((vendorIndex * 3 + partOffset) % 38)).padStart(4, '0')}`,
-          CONFIDENCE: String(0.55 + ((vendorIndex + partOffset) % 4) * 0.1),
-        })),
-      ),
+    ...buildSupplyRows('100301', medSourceParts, (matnr, index) => {
+      if (matnr === 'MAT-MS-08') return 0.51;
+      return 0.72 + (index % 5) * 0.05;
+    }),
+    ...buildSupplyRows('101001', [poolPart(10), poolPart(11), poolPart(12), poolPart(13), poolPart(14), poolPart(15), poolPart(16), poolPart(17), poolPart(18), poolPart(19)], (_, index) => 0.65 + (index % 4) * 0.08),
+    ...buildSupplyRows('101002', [poolPart(20), poolPart(21), poolPart(22), poolPart(23), poolPart(24), poolPart(25), poolPart(26), poolPart(27)], (_, index) => 0.7 + (index % 3) * 0.07),
+    ...buildSupplyRows(
+      '101003',
+      Array.from({ length: 15 }, (_, index) => poolPart(28 + index)),
+      (_, index) => 0.68 + (index % 6) * 0.04,
+    ),
+    ...Array.from({ length: 8 }, (_, vendorIndex) => {
+      const lifnr = String(101010 + vendorIndex);
+      const partCount = 3 + (vendorIndex % 3);
+      return Array.from({ length: partCount }, (_, line) => ({
+        LIFNR: lifnr,
+        MATNR: poolPart((43 + vendorIndex * 4 + line) % 80),
+        CONFIDENCE: (0.58 + ((vendorIndex + line) % 5) * 0.07).toFixed(2),
+      }));
+    }).flat(),
+    ...Array.from({ length: 14 }, (_, vendorIndex) => {
+      const lifnr = String(101020 + vendorIndex);
+      const partCount = 1 + (vendorIndex % 2);
+      return Array.from({ length: partCount }, (_, line) => ({
+        LIFNR: lifnr,
+        MATNR: poolPart(10 + ((vendorIndex * 2 + line) % 80)),
+        CONFIDENCE: (0.55 + (vendorIndex % 4) * 0.1).toFixed(2),
+      }));
+    }).flat(),
   ];
 
   const device_bom: BomRow[] = [
-    { DEVICE_ID: 'DEV-MISSING', MATNR: 'MAT-2000', CONFIDENCE: '0.8' },
-    { DEVICE_ID: 'DEV-IP200', MATNR: 'MAT-MISSING', CONFIDENCE: '0.8' },
+    { DEVICE_ID: 'DEV-MISSING-1', MATNR: poolPart(0), CONFIDENCE: '0.8' },
+    { DEVICE_ID: 'DEV-MISSING-2', MATNR: poolPart(1), CONFIDENCE: '0.8' },
+    { DEVICE_ID: 'DEV-IP200', MATNR: 'MAT-NOPE', CONFIDENCE: '0.8' },
+    { DEVICE_ID: 'DEV-IP200', MATNR: 'MAT-ALSO-NOPE', CONFIDENCE: '0.8' },
     { DEVICE_ID: 'DEV-IP200', MATNR: 'MAT-HELIX-01', CONFIDENCE: '0.82' },
-    { DEVICE_ID: 'DEV-IP200', MATNR: 'MAT-2000', CONFIDENCE: '0.91' },
+    ...SHARED_BOM_DEVICES.flatMap((deviceId, deviceIndex) =>
+      SHARED_BOM_PARTS.map((matnr, partIndex) => ({
+        DEVICE_ID: deviceId,
+        MATNR: matnr,
+        CONFIDENCE: (0.62 + ((deviceIndex + partIndex) % 7) * 0.05).toFixed(2),
+      })),
+    ),
     ...device_master
       .filter((row) => row.DEVICE_ID.startsWith('DEV-3'))
       .flatMap((row, deviceIndex) =>
-        Array.from({ length: 6 }, (_, line) => ({
+        Array.from({ length: 5 + (deviceIndex % 3) }, (_, line) => ({
           DEVICE_ID: row.DEVICE_ID,
-          MATNR: `MAT-${String(2000 + ((deviceIndex * 5 + line) % 38)).padStart(4, '0')}`,
-          CONFIDENCE: String(0.6 + (line % 5) * 0.08),
+          MATNR: poolPart((50 + deviceIndex * 3 + line) % 80),
+          CONFIDENCE: (0.58 + (line % 6) * 0.07).toFixed(2),
         })),
       ),
   ];
@@ -311,7 +435,7 @@ export function buildWeek2Fixtures(): Week2FixtureFiles {
 
   const manifest: Week2Manifest = {
     version: 1,
-    fixtureId: 'week2-sap-v1',
+    fixtureId: 'week2-sap-v2',
     expectedDataQuality: {
       rejectsByCode: { ...emptyRejectCounts(), ...report.rejectsByCode },
       skippedLinksByCode: { ...emptySkippedLinkCounts(), ...report.skippedLinksByCode },
