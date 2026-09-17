@@ -4,7 +4,7 @@ import { ONTOLOGY_SCHEMA_VERSION, SUPPLIER_DEVICE_RISK, terminalObjectType } fro
 
 describe('@sourcing/ontology', () => {
   it('exposes the schema version that the store and API pin against', () => {
-    expect(ONTOLOGY_SCHEMA_VERSION).toBe('0.1.0');
+    expect(ONTOLOGY_SCHEMA_VERSION).toBe('0.2.0');
   });
 
   it('pairs supplier device risk pattern with DEVICE terminal type', () => {

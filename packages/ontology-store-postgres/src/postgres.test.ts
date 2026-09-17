@@ -79,6 +79,26 @@ describe.skipIf(databaseUrl === undefined)('postgres ontology store', () => {
     });
   });
 
+  it('throws MergedObjectError when loading a merge tombstone', async () => {
+    await withTransaction(pool, async (client: Queryable) => {
+      await insertGraph(client, supplyChainFixture);
+      await client.query(
+        `UPDATE objects
+            SET merged_into_id = $1, merged_at = now()
+          WHERE id = $2`,
+        ['sup-2', 'sup-1'],
+      );
+      const ctx = createPostgresContext(client);
+      await expect(ctx.getObject('SUPPLIER', 'sup-1')).rejects.toMatchObject({
+        name: 'MergedObjectError',
+        objectType: 'SUPPLIER',
+        id: 'sup-1',
+        survivorId: 'sup-2',
+      });
+      expect(await ctx.getObject('SUPPLIER', 'sup-2')).toBeDefined();
+    });
+  });
+
   it('matches getLinks by either endpoint', async () => {
     await withTransaction(pool, async (client: Queryable) => {
       await insertGraph(client, supplyChainFixture);
@@ -218,6 +238,8 @@ function provisionalSupplier(): InMemoryObject {
       status: tracked('PROVISIONAL'),
       qualityRating: tracked(80),
       certifications: [tracked('ISO 13485')],
+      aliases: [],
+      mergedFrom: [],
     },
   };
 }

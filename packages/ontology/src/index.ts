@@ -103,6 +103,7 @@ export { enumeratePatternPaths, type PatternWalkGraph } from './pattern-walk.js'
 
 export {
   UnknownObjectError,
+  MergedObjectError,
   type LinkQuery,
   type ObjectOf,
   type OntologyContext,
@@ -140,12 +141,16 @@ export {
 
 export { actionByName, actions, type ActionName } from './actions.js';
 
+export { approveSupplierChange, approveSupplierChangeInputSchema, type ApproveSupplierChangeInput, type SupplierStatus } from './approve-supplier-change.js';
+
 export {
-  approveSupplierChange,
-  approveSupplierChangeInputSchema,
-  type ApproveSupplierChangeInput,
-  type SupplierStatus,
-} from './approve-supplier-change.js';
+  confirmSupplierMerge,
+  confirmSupplierMergeApprovalPolicy,
+  confirmSupplierMergeInputSchema,
+  validateConfirmSupplierMergePreconditions,
+  type ConfirmSupplierMergeInput,
+  type MergeProposal,
+} from './confirm-supplier-merge.js';
 
 export {
   flagPartForRequalification,

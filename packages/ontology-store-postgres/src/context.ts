@@ -3,6 +3,7 @@ import {
   collapseToTargets,
   linkSchema,
   makePath,
+  MergedObjectError,
   objectSchemas,
   objectTypeDefinition,
   UnknownObjectError,
@@ -164,9 +165,17 @@ export function createPostgresContext(db: Queryable): OntologyContext {
     objectType: T,
     id: string,
   ): Promise<ObjectOf<T> | undefined> {
-    const stored = await objectTypeOf(id);
-    if (stored === undefined) return undefined;
-    if (stored !== objectType) throw new UnknownObjectError(objectType, id);
+    const identity = await db.query<{
+      object_type: ObjectTypeName;
+      merged_into_id: string | null;
+    }>('SELECT object_type, merged_into_id FROM objects WHERE id = $1', [id]);
+
+    const row = identity.rows[0];
+    if (row === undefined) return undefined;
+    if (row.object_type !== objectType) throw new UnknownObjectError(objectType, id);
+    if (row.merged_into_id !== null) {
+      throw new MergedObjectError(objectType, id, row.merged_into_id);
+    }
 
     const { rows } = await db.query<PropertyRow>(SELECT_PROPERTIES, [id]);
     const assembled: Record<string, unknown> = { id };

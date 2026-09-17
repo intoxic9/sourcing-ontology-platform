@@ -6,4 +6,4 @@
  * Lives in its own module rather than in index.ts because the contract emit needs it and
  * index.ts re-exports the contract emit; importing it from there would be a cycle.
  */
-export const ONTOLOGY_SCHEMA_VERSION = '0.1.0';
+export const ONTOLOGY_SCHEMA_VERSION = '0.2.0';

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Sourcing ontology",
   "description": "Generated from the Zod schemas in @sourcing/ontology by scripts/emit-contract.mjs. Do not edit by hand. The x- prefixed keys are extensions that JSON Schema tooling ignores.",
-  "x-ontologyVersion": "0.1.0",
+  "x-ontologyVersion": "0.2.0",
   "x-linkTypes": [
     {
       "name": "SUPPLIES",
@@ -355,6 +355,64 @@
             ],
             "additionalProperties": false
           }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "provenance": {
+                "$ref": "#/$defs/Provenance"
+              },
+              "verification": {
+                "$ref": "#/$defs/Verification"
+              }
+            },
+            "required": [
+              "value",
+              "confidence",
+              "provenance"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "mergedFrom": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "provenance": {
+                "$ref": "#/$defs/Provenance"
+              },
+              "verification": {
+                "$ref": "#/$defs/Verification"
+              }
+            },
+            "required": [
+              "value",
+              "confidence",
+              "provenance"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -364,7 +422,9 @@
         "tier",
         "status",
         "qualityRating",
-        "certifications"
+        "certifications",
+        "aliases",
+        "mergedFrom"
       ],
       "additionalProperties": false,
       "x-objectType": "SUPPLIER"

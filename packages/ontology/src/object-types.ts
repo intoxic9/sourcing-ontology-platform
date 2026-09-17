@@ -49,6 +49,12 @@ export const supplierSchema = z.strictObject({
   // The only multiple-cardinality property in Week 1. Always present, empty when the
   // supplier holds none — never undefined, so nothing reads `certifications?.length`.
   certifications: z.array(tracked(z.string().min(1))),
+
+  /** Populated by entity resolution / confirmSupplierMerge. */
+  aliases: z.array(tracked(z.string().min(1))),
+
+  /** Supplier ids collapsed into this canonical object (each entry is tracked merge evidence). */
+  mergedFrom: z.array(tracked(z.string().min(1))),
 });
 export type Supplier = z.infer<typeof supplierSchema>;
 

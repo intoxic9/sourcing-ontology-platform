@@ -33,6 +33,8 @@ const supplier = (
     status: t(status),
     qualityRating: t(80),
     certifications: certs.map((value) => t(value)),
+    aliases: [],
+    mergedFrom: [],
   },
 });
 

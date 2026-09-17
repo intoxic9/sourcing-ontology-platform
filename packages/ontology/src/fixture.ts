@@ -35,6 +35,8 @@ const supplier = (id: string): InMemoryObject => ({
     status: t('APPROVED'),
     qualityRating: t(80),
     certifications: [t('ISO 13485'), t('ISO 9001', 0.7)],
+    aliases: [],
+    mergedFrom: [],
   },
 });
 

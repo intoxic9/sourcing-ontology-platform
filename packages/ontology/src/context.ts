@@ -33,6 +33,23 @@ export class UnknownObjectError extends Error {
 }
 
 /**
+ * Thrown when a caller requests an object id that was merged into a survivor.
+ *
+ * No transparent redirect: the caller must know a merge happened. Ingest resolves
+ * tombstones explicitly via object_source_keys.
+ */
+export class MergedObjectError extends Error {
+  constructor(
+    readonly objectType: ObjectTypeName,
+    readonly id: string,
+    readonly survivorId: string,
+  ) {
+    super(`${objectType} ${id} was merged into ${survivorId}`);
+    this.name = 'MergedObjectError';
+  }
+}
+
+/**
  * The port the ontology core needs from storage. Declared here in the pure core and
  * implemented by `@sourcing/ontology-store-postgres`; the dependency arrow never points
  * the other way (PLAN.md §4).

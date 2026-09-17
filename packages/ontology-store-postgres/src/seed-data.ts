@@ -164,6 +164,8 @@ function supplierObject(
       certifications: certs.map((cert, index) =>
         t(cert, index === 1 && cert !== 'ISO 13485' ? 0.57 : 1, index === 1 ? llm : direct),
       ),
+      aliases: [],
+      mergedFrom: [],
     },
   };
 }
